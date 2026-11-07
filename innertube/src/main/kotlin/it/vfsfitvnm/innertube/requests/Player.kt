@@ -3,7 +3,7 @@ package it.vfsfitvnm.innertube.requests
 import io.ktor.client.call.body
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.request.userAgent
+import io.ktor.http.userAgent
 import it.vfsfitvnm.innertube.Innertube
 import it.vfsfitvnm.innertube.models.Context
 import it.vfsfitvnm.innertube.models.PlayerResponse
