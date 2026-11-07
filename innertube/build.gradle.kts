@@ -9,6 +9,12 @@ sourceSets.all {
     java.srcDir("src/$name/kotlin")
 }
 
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("liveNewPipeProbe")) {
+        systemProperty("liveNewPipeProbe", project.property("liveNewPipeProbe").toString())
+    }
+}
+
 dependencies {
     implementation(projects.ktorClientBrotli)
 

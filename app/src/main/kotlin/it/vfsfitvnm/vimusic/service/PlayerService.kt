@@ -27,6 +27,7 @@ import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Handler
 import android.text.format.DateUtils
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -565,6 +566,14 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             else -> PlaybackState.STATE_NONE
         }
 
+    override fun onPlayerError(error: PlaybackException) {
+        Log.e(
+            Tag,
+            "Playback failed for ${player.currentMediaItem?.mediaId}: ${error.diagnosticMessage}",
+            error
+        )
+    }
+
     override fun onEvents(player: Player, events: Player.Events) {
         if (player.duration != C.TIME_UNSET) {
             mediaSession.setMetadata(
@@ -759,8 +768,14 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 dataSpec
             } else {
                 when (videoId) {
-                    ringBuffer.getOrNull(0)?.first -> dataSpec.withUri(ringBuffer.getOrNull(0)!!.second)
-                    ringBuffer.getOrNull(1)?.first -> dataSpec.withUri(ringBuffer.getOrNull(1)!!.second)
+                    ringBuffer.getOrNull(0)?.first -> dataSpec.withStreamUri(
+                        ringBuffer.getOrNull(0)!!.second,
+                        chunkLength
+                    )
+                    ringBuffer.getOrNull(1)?.first -> dataSpec.withStreamUri(
+                        ringBuffer.getOrNull(1)!!.second,
+                        chunkLength
+                    )
                     else -> {
                         val urlResult = runBlocking(Dispatchers.IO) {
                             Innertube.player(PlayerBody(videoId = videoId))
@@ -818,8 +833,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
                         urlResult?.getOrThrow()?.let { url ->
                             ringBuffer.append(videoId to url.toUri())
-                            dataSpec.withUri(url.toUri())
-                                .subrange(dataSpec.uriPositionOffset, chunkLength)
+                            dataSpec.withStreamUri(url.toUri(), chunkLength)
                         } ?: throw PlaybackException(
                             null,
                             urlResult?.exceptionOrNull(),
@@ -999,6 +1013,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
     }
 
     private companion object {
+        const val Tag = "ViMusicPlayback"
         const val NotificationId = 1001
         const val NotificationChannelId = "default_channel_id"
 

@@ -6,6 +6,17 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 
+internal fun AudioStream.toAdaptiveFormat(durationMs: Long?) =
+    PlayerResponse.StreamingData.AdaptiveFormat(
+        itag = itag,
+        mimeType = format?.mimeType ?: "audio/mp4",
+        bitrate = bitrate.takeUnless { it < 0 }?.toLong(),
+        averageBitrate = averageBitrate.takeUnless { it < 0 }?.toLong(),
+        approxDurationMs = durationMs,
+        // Keep the extractor's complete URL, including n, cpn, pot, range and signature fields.
+        url = content
+    )
+
 /** Resolves playable audio URLs when InnerTube returns signed formats or an obsolete client error. */
 internal object NewPipePlayer {
     init {
@@ -21,14 +32,7 @@ internal object NewPipePlayer {
         val formats = extractor.audioStreams
             .filter(AudioStream::isUrl)
             .map { stream ->
-                PlayerResponse.StreamingData.AdaptiveFormat(
-                    itag = stream.itag,
-                    mimeType = stream.format?.mimeType ?: "audio/mp4",
-                    bitrate = stream.bitrate.takeUnless { it < 0 }?.toLong(),
-                    averageBitrate = stream.averageBitrate.takeUnless { it < 0 }?.toLong(),
-                    approxDurationMs = extractor.length.takeIf { it > 0 }?.times(1000),
-                    url = stream.content
-                )
+                stream.toAdaptiveFormat(extractor.length.takeIf { it > 0 }?.times(1000))
             }
             .sortedBy { it.averageBitrate ?: it.bitrate ?: 0 }
 

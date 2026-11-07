@@ -47,7 +47,7 @@ dependencyResolutionManagement {
 
             library("brotli", "org.brotli", "dec").version("0.1.2")
 
-            library("newpipe-extractor", "com.github.TeamNewPipe", "NewPipeExtractor").version("v0.24.5")
+            library("newpipe-extractor", "com.github.TeamNewPipe", "NewPipeExtractor").version("v0.26.5")
 
             library("palette", "androidx.palette", "palette").version("1.0.0")
 
@@ -56,6 +56,7 @@ dependencyResolutionManagement {
 
         create("testLibs") {
             library("junit", "junit", "junit").version("4.13.2")
+            library("robolectric", "org.robolectric", "robolectric").version("4.10.3")
         }
     }
 }
