@@ -33,21 +33,26 @@ data class PlayerResponse(
         val adaptiveFormats: List<AdaptiveFormat>?
     ) {
         val highestQualityFormat: AdaptiveFormat?
-            get() = adaptiveFormats?.findLast { it.itag == 251 || it.itag == 140 }
+            get() = adaptiveFormats
+                ?.filter { it.url != null && it.mimeType.startsWith("audio/") }
+                ?.let { formats ->
+                    formats.findLast { it.itag == 251 || it.itag == 140 }
+                        ?: formats.maxByOrNull { it.averageBitrate ?: it.bitrate ?: 0 }
+                }
 
         @Serializable
         data class AdaptiveFormat(
             val itag: Int,
             val mimeType: String,
-            val bitrate: Long?,
-            val averageBitrate: Long?,
-            val contentLength: Long?,
-            val audioQuality: String?,
-            val approxDurationMs: Long?,
-            val lastModified: Long?,
-            val loudnessDb: Double?,
-            val audioSampleRate: Int?,
-            val url: String?,
+            val bitrate: Long? = null,
+            val averageBitrate: Long? = null,
+            val contentLength: Long? = null,
+            val audioQuality: String? = null,
+            val approxDurationMs: Long? = null,
+            val lastModified: Long? = null,
+            val loudnessDb: Double? = null,
+            val audioSampleRate: Int? = null,
+            val url: String? = null,
         )
     }
 

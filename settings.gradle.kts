@@ -47,6 +47,8 @@ dependencyResolutionManagement {
 
             library("brotli", "org.brotli", "dec").version("0.1.2")
 
+            library("newpipe-extractor", "com.github.TeamNewPipe", "NewPipeExtractor").version("v0.24.5")
+
             library("palette", "androidx.palette", "palette").version("1.0.0")
 
             library("desugaring", "com.android.tools", "desugar_jdk_libs").version("1.1.5")

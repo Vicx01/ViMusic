@@ -15,7 +15,11 @@ data class Context(
         val hl: String = "en",
         val visitorData: String = "CgtEUlRINDFjdm1YayjX1pSaBg%3D%3D",
         val androidSdkVersion: Int? = null,
-        val userAgent: String? = null
+        val userAgent: String? = null,
+        val deviceMake: String? = null,
+        val deviceModel: String? = null,
+        val osName: String? = null,
+        val osVersion: String? = null
     )
 
     @Serializable
@@ -35,10 +39,24 @@ data class Context(
         val DefaultAndroid = Context(
             client = Client(
                 clientName = "ANDROID_MUSIC",
-                clientVersion = "5.28.1",
+                clientVersion = "7.27.52",
                 platform = "MOBILE",
                 androidSdkVersion = 30,
-                userAgent = "com.google.android.apps.youtube.music/5.28.1 (Linux; U; Android 11) gzip"
+                osVersion = "11",
+                userAgent = "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 11) gzip"
+            )
+        )
+
+        val DefaultIos = Context(
+            client = Client(
+                clientName = "IOS",
+                clientVersion = "20.03.02",
+                platform = "MOBILE",
+                deviceMake = "Apple",
+                deviceModel = "iPhone16,2",
+                osName = "iPhone",
+                osVersion = "18.2.1.22C161",
+                userAgent = "com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)"
             )
         )
 
