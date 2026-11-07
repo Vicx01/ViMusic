@@ -21,6 +21,18 @@ jobs:
         run: ./gradlew :innertube:test :app:testDebugUnitTest > build.log 2>&1
       - name: Build with Gradle
         run: ./gradlew :innertube:test :app:assembleDebug >> build.log 2>&1
+      - name: Probe live stream ranges
+        run: ./gradlew :innertube:test --tests NewPipeLiveProbeTest -PliveNewPipeProbe=true >> build.log 2>&1
+      - name: Report live probe
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n \
+            --arg sha "$GITHUB_SHA" \
+            --arg summary "$(tail -n 80 build.log)" \
+            '{name:"Live stream diagnostics",head_sha:$sha,status:"completed",conclusion:"success",output:{title:"Live stream range probe",summary:$summary}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input -
       - name: Report build failure
         if: failure()
         env:
