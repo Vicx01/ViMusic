@@ -47,7 +47,7 @@ internal val PlaybackException.userMessage: String
         val detail = causeChain
             .mapNotNull { it.message?.takeIf(String::isNotBlank) }
             .lastOrNull()
-            ?: errorCodeString
+            ?: "error code $errorCode"
         return "Playback failed: $detail"
     }
 
