@@ -27,7 +27,7 @@ class PlaybackErrorFormatterTest {
             "Forbidden",
             null,
             emptyMap(),
-            null,
+            DataSpec.Builder().setUri("https://example.com/audio").build(),
             "PO token required".toByteArray()
         )
         val wrapped = playbackError(Exception("Range request failed", httpError))
