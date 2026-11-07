@@ -18,7 +18,9 @@ dependencies {
     implementation(libs.ktor.client.encoding)
     implementation(libs.ktor.client.serialization)
     implementation(libs.ktor.serialization.json)
-    implementation(libs.newpipe.extractor)
+    implementation(libs.newpipe.extractor) {
+        exclude(group = "com.github.spotbugs", module = "spotbugs-annotations")
+    }
 
     testImplementation(testLibs.junit)
 }
