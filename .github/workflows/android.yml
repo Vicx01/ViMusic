@@ -2,6 +2,10 @@ name: CI
 
 on: push
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,9 +18,19 @@ jobs:
           distribution: "temurin"
           cache: gradle
       - name: Run regression tests
-        run: ./gradlew :innertube:test :app:testDebugUnitTest
+        run: ./gradlew :innertube:test :app:testDebugUnitTest > build.log 2>&1
       - name: Build with Gradle
-        run: ./gradlew :innertube:test :app:assembleDebug
+        run: ./gradlew :innertube:test :app:assembleDebug >> build.log 2>&1
+      - name: Report build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -n \
+            --arg sha "$GITHUB_SHA" \
+            --arg summary "$(tail -n 180 build.log)" \
+            '{name:"Gradle diagnostics",head_sha:$sha,status:"completed",conclusion:"failure",output:{title:"Gradle build failed",summary:$summary}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input -
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug.apk
