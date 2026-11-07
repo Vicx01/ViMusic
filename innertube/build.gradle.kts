@@ -26,7 +26,10 @@ dependencies {
     implementation(libs.ktor.serialization.json)
     implementation(libs.newpipe.extractor) {
         exclude(group = "com.github.spotbugs", module = "spotbugs-annotations")
+        exclude(group = "org.mozilla", module = "rhino")
     }
+    // NewPipe's Rhino 1.8.1 dependency cannot be dexed by this project's older Android D8.
+    implementation("org.mozilla:rhino:1.7.15")
 
     testImplementation(testLibs.junit)
 }
