@@ -12,6 +12,7 @@ internal class RangeTestServer(private val data: ByteArray) : Closeable {
     val url = "http://127.0.0.1:${server.localPort}/audio"
     val ranges = CopyOnWriteArrayList<String>()
     val statuses = CopyOnWriteArrayList<Int>()
+    val regressionHeaders = CopyOnWriteArrayList<String>()
     private val worker = thread(name = "range-test-server", isDaemon = true) {
         while (!server.isClosed) {
             val socket = try { server.accept() } catch (_: java.io.IOException) { break }
@@ -20,12 +21,15 @@ internal class RangeTestServer(private val data: ByteArray) : Closeable {
                 val request = reader.readLine() ?: return@use
                 if (!request.startsWith("GET ")) return@use
                 var range: String? = null
+                var regressionHeader: String? = null
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
                     if (line.startsWith("Range:", ignoreCase = true)) range = line.substringAfter(':').trim()
+                    if (line.startsWith("X-Regression-Header:", ignoreCase = true)) regressionHeader = line.substringAfter(':').trim()
                 }
                 ranges.add(range ?: "none")
+                regressionHeaders.add(regressionHeader ?: "none")
                 val match = range?.let { value -> Regex("bytes=(\\d+)-(\\d*)").matchEntire(value) }
                 val start = match?.groupValues?.get(1)?.toLong() ?: 0L
                 val end = match?.groupValues?.get(2)?.takeIf(String::isNotEmpty)?.toLong()

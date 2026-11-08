@@ -2,6 +2,7 @@ package it.vfsfitvnm.vimusic.service
 
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
+import it.vfsfitvnm.innertube.requests.PlayerRequestException
 import java.net.UnknownHostException
 import java.nio.channels.UnresolvedAddressException
 import java.util.Collections
@@ -16,7 +17,9 @@ internal fun playbackErrorDetails(error: PlaybackException): String {
         causes.add(current)
         current = current.cause
     }
+    val resolverError = causes.filterIsInstance<PlayerRequestException>().firstOrNull()
     val summary = when {
+        resolverError != null -> "Could not resolve this song"
         causes.any { it is UnresolvedAddressException || it is UnknownHostException } -> "A network error has occurred"
         causes.any { it is PlayableFormatNotFoundException } -> "Couldn't find a playable audio format"
         causes.any { it is UnplayableException } -> "The original video source is unplayable"
@@ -29,7 +32,13 @@ internal fun playbackErrorDetails(error: PlaybackException): String {
     return buildString {
         append(summary)
         append("\n").append(error.errorCodeName).append(" (").append(error.errorCode).append(")")
-        if (status != null) append("\nHTTP ").append(status)
+        if (resolverError != null) {
+            append("\nRequest: ").append(resolverError.stage.description)
+            append("\nHTTP ").append(resolverError.httpStatus)
+            append("\nResponse: ").append(resolverError.responseSummary)
+            append("\nFinal host: ").append(resolverError.finalOrigin)
+            append("; API-key header: ").append(if (resolverError.apiKeyHeaderPresent) "present" else "absent")
+        } else if (status != null) append("\nAudio HTTP ").append(status)
         append("\nCause: ").append(causes.joinToString(" → ") { it.javaClass.simpleName })
     }
 }

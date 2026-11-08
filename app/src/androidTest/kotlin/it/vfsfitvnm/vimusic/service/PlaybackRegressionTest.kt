@@ -15,6 +15,12 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import it.vfsfitvnm.innertube.requests.PlayerRequestException
+import it.vfsfitvnm.innertube.requests.PlayerRequestStage
+import java.io.IOException
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
@@ -77,13 +83,38 @@ class PlaybackRegressionTest {
     }
 
     @Test
+    fun resolverHttpErrorIsSanitizedAndNotRetried() {
+        val rawCause = IllegalStateException("https://secret.invalid/?token=do-not-show")
+        val failure = PlayerRequestException(
+            PlayerRequestStage.EMBEDDED_PLAYER, 403, "code=403, status=PERMISSION_DENIED",
+            "music.youtube.com", true, rawCause
+        )
+        val error = PlaybackException("do-not-show", failure, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        val text = playbackErrorDetails(error)
+        assertTrue(text.contains("InnerTube player (embedded client)"))
+        assertTrue(text.contains("HTTP 403"))
+        assertTrue(text.contains("PERMISSION_DENIED"))
+        assertTrue(text.contains("PlayerRequestException → IllegalStateException"))
+        assertFalse(text.contains("do-not-show"))
+        assertFalse(text.contains("secret.invalid"))
+        val info = LoadErrorHandlingPolicy.LoadErrorInfo(
+            LoadEventInfo(1, DataSpec(Uri.parse("fixture")), 0), MediaLoadData(C.DATA_TYPE_MEDIA), failure, 1
+        )
+        val policy = PlaybackLoadErrorHandlingPolicy()
+        assertEquals(C.TIME_UNSET, policy.getRetryDelayMsFor(info))
+        val ordinary = LoadErrorHandlingPolicy.LoadErrorInfo(info.loadEventInfo, info.mediaLoadData, IOException(), 1)
+        assertEquals(0L, policy.getRetryDelayMsFor(ordinary))
+    }
+
+    @Test
     fun httpRangesAndResponseHeadersFollowTheRequestedDataSpec() {
         val data = ByteArray(800_000) { (it % 251).toByte() }
         RangeTestServer(data).use { server ->
             val resolver = PlaybackDataSpecResolver({ _, _ -> false }, { Uri.parse(server.url) })
             val source = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory(), resolver).createDataSource()
             val request = DataSpec.Builder().setUri("fixture").setKey("song")
-                .setPosition(524_288L).setLength(16_384L).build()
+                .setPosition(524_288L).setLength(16_384L)
+                .setHttpRequestHeaders(mapOf("X-Regression-Header" to "fixture-value")).build()
             try {
                 assertEquals(16_384L, source.open(request))
                 val headers = source.responseHeaders
@@ -101,6 +132,7 @@ class PlaybackRegressionTest {
                 assertEquals(output.size, total)
                 assertTrue(output.contentEquals(data.copyOfRange(524_288, 540_672)))
                 assertEquals("bytes=524288-540671", server.ranges.single())
+                assertEquals("fixture-value", server.regressionHeaders.single())
                 source.close()
 
                 val continuation = request.buildUpon().setPosition(540_672L).setLength(C.LENGTH_UNSET.toLong()).build()
@@ -108,6 +140,7 @@ class PlaybackRegressionTest {
                 val nextRange = source.responseHeaders.entries.firstOrNull { it.key.equals("Content-Range", true) }?.value?.firstOrNull()
                 assertEquals("bytes 540672-799999/800000", nextRange)
                 assertEquals("bytes=540672-", server.ranges.last())
+                assertEquals("fixture-value", server.regressionHeaders.last())
                 source.close()
 
                 val pastEnd = request.buildUpon().setPosition(800_001L).setLength(C.LENGTH_UNSET.toLong()).build()

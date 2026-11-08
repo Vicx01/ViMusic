@@ -83,6 +83,7 @@ jobs:
           required = {
               "resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit",
               "errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls",
+              "resolverHttpErrorIsSanitizedAndNotRetried",
               "httpRangesAndResponseHeadersFollowTheRequestedDataSpec",
               "continuousPlaybackPassesFirst512KiBAndThirtySeconds",
           }

@@ -826,6 +826,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     private fun createMediaSourceFactory(): MediaSource.Factory {
         return DefaultMediaSourceFactory(createDataSourceFactory(), createExtractorsFactory())
+            .setLoadErrorHandlingPolicy(PlaybackLoadErrorHandlingPolicy())
     }
 
     private fun createExtractorsFactory(): ExtractorsFactory {
