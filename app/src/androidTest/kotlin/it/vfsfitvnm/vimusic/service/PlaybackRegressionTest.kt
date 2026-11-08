@@ -18,9 +18,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.Loader
 import it.vfsfitvnm.innertube.requests.PlayerRequestException
 import it.vfsfitvnm.innertube.requests.PlayerRequestStage
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
@@ -113,6 +116,46 @@ class PlaybackRegressionTest {
         assertEquals(C.TIME_UNSET, policy.getRetryDelayMsFor(info))
         val ordinary = LoadErrorHandlingPolicy.LoadErrorInfo(info.loadEventInfo, info.mediaLoadData, IOException(), 1)
         assertEquals(0L, policy.getRetryDelayMsFor(ordinary))
+    }
+
+    @Test(timeout = 20_000)
+    fun loaderWrapsNonIoAndForwardsResolverIo() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { installPlaybackMedia3Log() }
+        fun loadFailure(thrown: Throwable): IOException {
+            val completed = CountDownLatch(1)
+            var observed: IOException? = null
+            val loader = Loader("fixture")
+            val loadable: Loader.Loadable = object : Loader.Loadable {
+                override fun cancelLoad() = Unit
+                override fun load() { throw thrown }
+            }
+            instrumentation.runOnMainSync {
+                loader.startLoading(loadable, object : Loader.Callback<Loader.Loadable> {
+                    override fun onLoadCompleted(loadable: Loader.Loadable, elapsedRealtimeMs: Long, loadDurationMs: Long) { completed.countDown() }
+                    override fun onLoadCanceled(loadable: Loader.Loadable, elapsedRealtimeMs: Long, loadDurationMs: Long, released: Boolean) { completed.countDown() }
+                    override fun onLoadError(loadable: Loader.Loadable, elapsedRealtimeMs: Long, loadDurationMs: Long, error: IOException, errorCount: Int): Loader.LoadErrorAction {
+                        observed = error
+                        completed.countDown()
+                        return Loader.DONT_RETRY_FATAL
+                    }
+                }, 1)
+            }
+            try {
+                assertTrue("loader callback timed out", completed.await(10, TimeUnit.SECONDS))
+                return checkNotNull(observed)
+            } finally {
+                instrumentation.runOnMainSync { loader.release() }
+            }
+        }
+        val nonIo = IllegalStateException("fixture")
+        val unexpected = loadFailure(nonIo)
+        assertTrue(unexpected is Loader.UnexpectedLoaderException)
+        assertTrue(unexpected.cause === nonIo)
+        val resolverFailure = PlayerRequestException(PlayerRequestStage.ANDROID_PLAYER, 403,
+            "omitted", "music.youtube.com", false, nonIo)
+        assertTrue(loadFailure(resolverFailure) === resolverFailure)
+        assertTrue(resolverFailure.cause === nonIo)
     }
 
     @Test
