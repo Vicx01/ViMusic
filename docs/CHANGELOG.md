@@ -1,9 +1,14 @@
 # Changelog
 
-## Playback range investigation (current working tree)
+## Playback validation and debug build
+
+* CI built debug and instrumentation APKs, ran the JVM tasks and passed the connected Android tests on an API 29 x86_64 emulator ([run 42463503585](https://github.com/Vicx01/ViMusic/actions/runs/42463503585)). The playback tests use a local synthetic stream; real provider/physical-device validation remains outstanding.
+* Modernized artifact upload and added emulator/report checks. The debug APK is a CI artifact, not a production-signed release.
+
+## Playback range investigation
 
 * Removed the resolver's artificial 512 KiB DataSpec limit, retained cache and provider architecture, and exposed sanitized error/HTTP diagnostics.
-* Added unexecuted local HTTP/range and 37-second Android playback regression tests with a synthetic fixture. The reported real-world failure remains unverified; a temporary JDK was available but Gradle download, Android SDK and device were unavailable.
+* Added local HTTP/range and 37-second Android playback regression tests with a synthetic fixture. The reported real-world failure remains unverified.
 
 ## Documentation audit
 
@@ -17,4 +22,4 @@ The checked-in [`fastlane/metadata/android/en-US/changelogs/`](../fastlane/metad
 
 ## Outstanding
 
-Reproduce/diagnose reported playback failure, establish JDK/SDK and run builds/tests, add deterministic coverage, review signing, security/privacy, dependencies/licenses and external-service compatibility. See [known issues](KNOWN_ISSUES.md).
+Reproduce the reported failure against real providers on physical devices, extend deterministic coverage, and review signing, security/privacy, dependencies/licenses and external-service compatibility. See [known issues](KNOWN_ISSUES.md).

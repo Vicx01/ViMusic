@@ -1,6 +1,6 @@
 # Findings and priorities
 
-Severity expresses impact and review priority, not a claim of exploitability or measured frequency. **Confirmed** means confirmed by static source inspection only unless otherwise stated. **Suspected** means plausible, not reproduced. No Android app or provider runtime test was performed; an isolated Media3 data-source experiment was run.
+Severity expresses impact and review priority, not a claim of exploitability or measured frequency. **Confirmed** means confirmed by static source inspection only unless otherwise stated. **Suspected** means plausible, not reproduced. API 29 emulator tests passed using a local synthetic stream; live provider and physical-device behavior remain unverified.
 
 ## Critical
 
@@ -8,16 +8,16 @@ No confirmed critical security compromise or critical bug was established. The r
 
 ## High
 
-* **Reported ~30-second playback stop — suspected, not reproduced.** The previous resolver imposed a 512 KiB DataSpec, causing a source-confirmed premature end-of-input on that open; it has been changed to preserve the requested range. Whether this caused the reported error remains unverified. Run the added instrumentation tests and gather sanitized provider/device traces; URL expiry and provider restrictions remain alternatives. [Investigation](PLAYBACK_ENGINE.md).
+* **Reported ~30-second playback stop — suspected, not reproduced.** The previous resolver imposed a 512 KiB DataSpec, causing a source-confirmed premature end-of-input on that open; it has been changed to preserve the requested range. Whether this caused the reported error remains unverified. The instrumentation task passed on an API 29 emulator; gather sanitized provider/device traces; URL expiry and provider restrictions remain alternatives. [Investigation](PLAYBACK_ENGINE.md).
 * **Unreliable player integration — confirmed design risk.** Private hardcoded old client profiles, static visitor data, direct URL-only parsing and no cipher/`n`/proof-token processing; conditional Piped fallback only after two specific status results and exact bitrate matching. No evidence this is the observed stop's cause. See [API integrations](API_INTEGRATIONS.md).
 * **Playlist synchronization can replace a local list with a partial remote result — confirmed code path, impact untested.** `utils/Utils.kt` `completed()` breaks on a continuation failure and still returns success; `LocalPlaylistSongs.kt` then clears the local playlist and inserts the returned subset. Preserve the original unless all pages are known complete and add failure-injection tests.
 * **Release signing — confirmed configuration.** `app/build.gradle.kts` release uses debug signing; replace via a proper secure release process before distributing an update. Do not document secrets.
-* **No meaningful automated coverage — confirmed by test source.** The two JVM tests are empty; new player/range instrumentation tests have been added but not executed. Migration and broad UI coverage remain absent. Build was not runnable here.
+* **No meaningful automated coverage — confirmed by test source.** The two client JVM tests are empty; the player/range instrumentation task passed on an API 29 emulator with synthetic media. Migration, broad UI and live-provider coverage remain absent.
 
 ## Medium
 
 * **Cross-origin key header risk — source-confirmed global header configuration, transmission unverified.** `Innertube` default request config adds `X-Goog-Api-Key` while an absolute third-party Piped URL uses the same client. Capture sanitized test traffic and scope defaults per origin. Static key is not a secret but should not be unnecessarily disclosed.
-* **Error diagnosis — improved, not device-verified.** The overlay now displays the sanitized cause chain, Media3 code and HTTP status; debug builds log safe HTTP headers. Actual provider and physical-device traces are still needed.
+* **Error diagnosis — improved, not device-verified.** The overlay now displays the sanitized cause chain, Media3 code and HTTP status; debug builds log safe HTTP headers. The synthetic emulator suite passed; actual provider and physical-device traces are still needed.
 * **Restoration — confirmed limitation.** Queue saving is scheduled in `onDestroy`, which is not guaranteed after process kill; restoring clears saved rows. No proof of robust process-death restoration.
 * **Database backup/import — risk.** Unencrypted exports include personal history; imported files are copied to database location. Failure/invalid-file handling and restore atomicity need dedicated tests; no data loss has been reproduced.
 * **Privacy/supply chain — confirmed exposure and incomplete assurance.** `allowBackup=true`, multiple remote providers, outdated alpha/beta dependencies, no locks/checksums or vulnerability scan. See [security](SECURITY_AND_PRIVACY.md).

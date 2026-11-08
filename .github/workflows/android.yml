@@ -15,6 +15,8 @@ jobs:
           cache: gradle
       - name: Build debug APK
         run: .github/scripts/gradle-ci.sh :app:assembleDebug
+      - name: Record debug APK SHA-256
+        run: echo "::notice title=Debug APK SHA-256::$(sha256sum app/build/outputs/apk/debug/app-debug.apk | cut -d' ' -f1)"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -70,6 +72,27 @@ jobs:
           PY
           fi
           exit "$result"
+      - name: Verify instrumentation test report
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path("app/build/outputs/androidTest-results/connected").rglob("TEST-*.xml"))
+          cases = []
+          for path in reports:
+              cases.extend(ET.parse(path).getroot().iter("testcase"))
+          required = {
+              "resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit",
+              "errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls",
+              "httpRangesAndResponseHeadersFollowTheRequestedDataSpec",
+              "continuousPlaybackPassesFirst512KiBAndThirtySeconds",
+          }
+          executed = {case.get("name") for case in cases if case.find("skipped") is None}
+          failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
+          missing = required - executed
+          print(f"::notice title=Playback instrumentation results::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
+          if missing or failed:
+              raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
+          PY
       - name: Upload Android test results
         if: always()
         uses: actions/upload-artifact@v4
