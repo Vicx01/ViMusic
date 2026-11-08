@@ -172,8 +172,8 @@ jobs:
           root = ET.parse(reports[0]).getroot()
           lines = (root.findtext('system-out') or '').splitlines()
           cases = [line for line in lines if re.fullmatch(r'PROBE\|[a-z_]+\|http=(?:[0-9]{3}|none)\|[A-Za-z0-9_=, |()-]+', line)]
-          if len(cases) != 4:
-              raise SystemExit('Expected four sanitized probe result lines')
+          if len(cases) != 13:
+              raise SystemExit('Expected thirteen sanitized probe result lines')
           for line in cases:
               print('::notice title=InnerTube probe::' + line)
           PY
