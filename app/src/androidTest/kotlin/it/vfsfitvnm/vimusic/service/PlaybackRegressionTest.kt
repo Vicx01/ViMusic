@@ -102,6 +102,10 @@ class PlaybackRegressionTest {
         assertTrue(text.contains("PlayerRequestException → IllegalStateException"))
         assertFalse(text.contains("do-not-show"))
         assertFalse(text.contains("secret.invalid"))
+        val media3Log = "Playback error\n  Caused by: https://secret.invalid/?token=do-not-show"
+        assertFalse(safeMedia3LogMessage("ExoPlayerImplInternal", media3Log).contains("do-not-show"))
+        assertFalse(safeMedia3LogMessage("LoadTask", "Unexpected exception loading stream\n  $media3Log").contains("do-not-show"))
+        assertEquals("ordinary diagnostic", safeMedia3LogMessage("OtherTag", "ordinary diagnostic"))
         val info = LoadErrorHandlingPolicy.LoadErrorInfo(
             LoadEventInfo(1, DataSpec(Uri.parse("fixture")), 0), MediaLoadData(C.DATA_TYPE_MEDIA), failure, 1
         )

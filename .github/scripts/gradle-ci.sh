@@ -2,7 +2,7 @@
 # Make failures available as check annotations even when the full log cannot be downloaded.
 set -uo pipefail
 log_file="${RUNNER_TEMP:-/tmp}/vimusic-gradle.log"
-./gradlew --no-daemon --console=plain "$@" >"$log_file" 2>&1
+"${GRADLE_EXECUTABLE:-./gradlew}" --no-daemon --console=plain "$@" >"$log_file" 2>&1
 result=$?
 tail -n 120 "$log_file"
 if [ "$result" -ne 0 ]; then

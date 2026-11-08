@@ -13,6 +13,8 @@ jobs:
           java-version: "11"
           distribution: temurin
           cache: gradle
+      - name: Install verified Gradle 7.4
+        run: .github/scripts/install-gradle-ci.sh
       - name: Build debug APK
         run: .github/scripts/gradle-ci.sh :app:assembleDebug
       - name: Record debug APK SHA-256
@@ -44,6 +46,8 @@ jobs:
           java-version: "11"
           distribution: temurin
           cache: gradle
+      - name: Install verified Gradle 7.4
+        run: .github/scripts/install-gradle-ci.sh
       - name: Set up JDK 17 for Android command-line tools
         uses: actions/setup-java@v4
         with:

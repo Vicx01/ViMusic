@@ -177,6 +177,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     override fun onCreate() {
         super.onCreate()
+        installPlaybackMedia3Log()
 
         bitmapProvider = BitmapProvider(
             bitmapSize = (256 * resources.displayMetrics.density).roundToInt(),
