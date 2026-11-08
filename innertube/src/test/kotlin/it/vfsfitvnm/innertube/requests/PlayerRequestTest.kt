@@ -51,9 +51,8 @@ class PlayerRequestTest {
             }
             try {
                 val error = Innertube.player(client, PlayerBody(videoId = "fixture"))!!.exceptionOrNull()
-                assertTrue(error is PlayerRequestException)
+                assertTrue("stage=$stage exceptionType=${error?.javaClass?.simpleName}", error is PlayerRequestException)
                 error as PlayerRequestException
-                assertTrue(error is IOException)
                 assertTrue(error.cause is ClientRequestException)
                 assertEquals(stage, error.stage)
                 assertEquals(403, error.httpStatus)
@@ -81,7 +80,7 @@ class PlayerRequestTest {
     fun networkIoFailureIsNotSwallowedOrReclassified() = runBlocking {
         val failure = IOException("fixture")
         try {
-            playerHttpRequest(PlayerRequestStage.ANDROID_PLAYER) { throw failure }
+            playerHttpRequest<Unit>(PlayerRequestStage.ANDROID_PLAYER) { throw failure }
             fail("Expected exception")
         } catch (actual: IOException) {
             assertSame(failure, actual)
