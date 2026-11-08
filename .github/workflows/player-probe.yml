@@ -1,0 +1,40 @@
+name: Opt-in InnerTube player probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: temurin
+          cache: gradle
+      - name: Install verified Gradle
+        run: .github/scripts/install-gradle-ci.sh
+      - name: Probe one public fixture with controlled request profiles
+        env:
+          VIMUSIC_LIVE_PLAYER_PROBE: "1"
+        run: .github/scripts/gradle-ci.sh :innertube:test --tests '*LivePlayerProbeTest.controlledPlayerRequests'
+      - name: Publish sanitized results
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('innertube/build/test-results/test').glob('*LivePlayerProbeTest*.xml'))
+          if len(reports) != 1:
+              raise SystemExit('Live probe report missing')
+          root = ET.parse(reports[0]).getroot()
+          lines = (root.findtext('system-out') or '').splitlines()
+          cases = [line for line in lines if re.fullmatch(r'PROBE\|[a-z_]+\|http=(?:[0-9]{3}|none)\|[A-Za-z0-9_=, |()-]+', line)]
+          if len(cases) != 4:
+              raise SystemExit('Expected four sanitized probe result lines')
+          for line in cases:
+              print('::notice title=InnerTube probe::' + line)
+          PY
