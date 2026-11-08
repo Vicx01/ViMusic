@@ -35,6 +35,10 @@
 - Open YouTube/YouTube Music links (`watch`, `playlist`, `channel`)
 - ...
 
+## Documentation
+
+See the [source audit and developer documentation](docs/README.md), including [playback troubleshooting](docs/PLAYBACK_ENGINE.md) and [build instructions](docs/BUILD_AND_TESTING.md).
+
 ## Installation
 
 [<img src="https://github.com/machiav3lli/oandbackupx/blob/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png"
