@@ -46,6 +46,7 @@ class PlayerRequestTest {
                 install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true }) }
                 defaultRequest {
                     url(scheme = "https", host = "music.youtube.com")
+                    headers.append(HttpHeaders.ContentType, "application/json")
                     headers.append("X-Goog-Api-Key", "do-not-show")
                 }
             }
