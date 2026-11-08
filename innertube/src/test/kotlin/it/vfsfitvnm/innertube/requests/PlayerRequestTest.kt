@@ -21,7 +21,7 @@ import java.io.IOException
 
 class PlayerRequestTest {
     private val sensitiveBody = """{"error":{"code":403,"status":"PERMISSION_DENIED","message":"https://secret.invalid/?token=do-not-show","errors":[{"reason":"forbidden"}]}}"""
-    private fun player(status: String) = """{"playabilityStatus":{"status":"$status"},"streamingData":{"adaptiveFormats":[]},"videoDetails":{"videoId":"fixture"}}"""
+    private fun player(status: String) = """{"playabilityStatus":{"status":"$status"},"playerConfig":null,"streamingData":{"adaptiveFormats":[]},"videoDetails":{"videoId":"fixture"}}"""
 
     @Test
     fun eachRequestPhasePreservesKtorCauseAndReportsOnlySafeMetadata() = runBlocking {
