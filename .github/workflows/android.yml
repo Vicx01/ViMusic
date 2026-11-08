@@ -40,7 +40,7 @@ jobs:
           import pathlib, xml.etree.ElementTree as ET
           reports = list(pathlib.Path("innertube/build/test-results/test").glob("TEST-*.xml"))
           cases = [case for path in reports for case in ET.parse(path).getroot().iter("testcase")]
-          required = {"eachRequestPhasePreservesKtorCauseAndReportsOnlySafeMetadata", "unknownBodiesAndUntrustedFieldsAreNotExposed", "networkIoFailureIsNotSwallowedOrReclassified"}
+          required = {"eachRequestPhasePreservesKtorCauseAndReportsOnlySafeMetadata", "unknownBodiesAndUntrustedFieldsAreNotExposed", "networkIoFailureIsNotSwallowedOrReclassified", "productionPlayerRequestHasAuditedIdentityBodyAndHeaders"}
           executed = {case.get("name") for case in cases if case.find("skipped") is None}
           failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
           missing = required - executed
