@@ -65,7 +65,7 @@ jobs:
           excerpt = "\n".join(lines[-80:])
           for report in pathlib.Path("app/build/outputs/androidTest-results").rglob("*.xml"):
               excerpt += "\n" + report.read_text(errors="replace")[-12000:]
-          text = excerpt[-20000:]
+          text = excerpt[-3000:]
           print("::error title=Emulator validation failed::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
           PY
           fi
