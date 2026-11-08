@@ -7,7 +7,13 @@ sdkmanager --install 'system-images;android-29;google_apis;x86_64' >"${RUNNER_TE
 echo 'Installed emulator system image.'
 ls -l /dev/kvm || true
 emulator -accel-check || true
-printf 'no\n' | avdmanager create avd --force --name vimusic-test --package 'system-images;android-29;google_apis;x86_64'
+export ANDROID_AVD_HOME="${RUNNER_TEMP}/vimusic-avds"
+mkdir -p "$ANDROID_AVD_HOME"
+printf 'no\n' | avdmanager create avd --force --name vimusic-test --path "$ANDROID_AVD_HOME/vimusic-test.avd" --package 'system-images;android-29;google_apis;x86_64'
+echo 'AVD directory:'
+ls -la "$ANDROID_AVD_HOME"
+emulator -list-avds
+test -f "$ANDROID_AVD_HOME/vimusic-test.ini"
 emulator -avd vimusic-test -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim >"${RUNNER_TEMP}/vimusic-emulator.log" 2>&1 &
 emulator_pid=$!
 cleanup() {
