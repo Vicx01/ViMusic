@@ -1,5 +1,10 @@
 # Changelog
 
+## Ktor playback failure investigation
+
+* Classified the reported Media3/Ktor cause chain, added privacy-restricted resolver phase/status and audio-range diagnostics, and retained the Ktor exception as a cause without changing the provider.
+* Added mock response, Media3 loader and retry-policy coverage; CI [run 42466547585](https://github.com/Vicx01/ViMusic/actions/runs/42466547585) passed JVM tests, debug builds and six API 29 synthetic emulator tests. The actual user incident and live provider/device remain unverified.
+
 ## Playback validation and debug build
 
 * CI built debug and instrumentation APKs, ran the JVM tasks and passed the connected Android tests on an API 29 x86_64 emulator ([run 42463503585](https://github.com/Vicx01/ViMusic/actions/runs/42463503585)). The playback tests use a local synthetic stream; real provider/physical-device validation remains outstanding.
