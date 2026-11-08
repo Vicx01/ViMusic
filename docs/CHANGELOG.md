@@ -1,6 +1,11 @@
 # Changelog
 
-## Documentation audit (current branch)
+## Playback range investigation (current working tree)
+
+* Removed the resolver's artificial 512 KiB DataSpec limit, retained cache and provider architecture, and exposed sanitized error/HTTP diagnostics.
+* Added unexecuted local HTTP/range and 37-second Android playback regression tests with a synthetic fixture. The reported real-world failure remains unverified; a temporary JDK was available but Gradle download, Android SDK and device were unavailable.
+
+## Documentation audit
 
 * Added source-based architecture, flow, network, playback, database, lyrics, dependency, security, build/testing, issue and contributor documentation.
 * Documented the absence of NewPipe, the conditional third-party Piped-compatible fallback, the 512 KiB first-resolution timing hypothesis and lack of runtime verification. No app behavior or dependencies changed.

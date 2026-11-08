@@ -52,7 +52,7 @@ Duration match tolerance increases from 0 to 5 seconds, then keyword-only fallba
 
 ## Other runtime connections and boundaries
 
-* Audio: Media3 `DefaultHttpDataSource` GETs provider-returned signed URLs/byte ranges; hosts are dynamic, not hardcoded or guaranteed. Firefox 91 User-Agent, connect timeout 16s, read timeout 8s; no per-stream extractor headers are supplied. This is media delivery, not NewPipe.
+* Audio: Media3 `DefaultHttpDataSource` GETs provider-returned signed URLs/byte ranges; hosts are dynamic, not hardcoded or guaranteed. Firefox 91 User-Agent, connect timeout 16s, read timeout 8s; no per-stream extractor headers are supplied. Debug builds log only sanitized position, length, status, and selected validated response headers; see [playback diagnostics](PLAYBACK_ENGINE.md). This is media delivery, not NewPipe.
 * Artwork: Coil fetches URLs provided in metadata; code explicitly recognizes `i.ytimg.com`, `lh3.googleusercontent.com`, `yt3.ggpht.com` for thumbnail handling. Other server-provided image hosts can occur. Android/framework and Coil behavior governs redirects/cache.
 * Links: sharing/opening YouTube links, GitHub project/issue links, and `ACTION_WEB_SEARCH` for lyrics hand control to external apps; these are not backend API integrations. Inbound YouTube deep links are handled by `MainActivity`.
 * No source evidence of analytics/crash reporting SDK, a download manager, WebView, account sync or other runtime services. Local Media3 playback statistics are stored in Room, not sent to an analytics endpoint. This does not prove all transitive library behavior absent.

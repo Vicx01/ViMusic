@@ -13,6 +13,7 @@ android {
         targetSdk = 33
         versionCode = 20
         versionName = "0.5.4"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     splits {
@@ -91,6 +92,9 @@ dependencies {
 
     implementation(projects.innertube)
     implementation(projects.kugou)
+
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
 
     coreLibraryDesugaring(libs.desugaring)
 }

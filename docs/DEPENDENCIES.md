@@ -20,6 +20,7 @@ Versions below are direct declared versions in [`settings.gradle.kts`](../settin
 | AndroidX Palette | 1.0.0 | dynamic colors | AndroidX; verify |
 | desugar_jdk_libs | 1.1.5 | older Android Java API support | Verify artifact and transitive license/notice |
 | JUnit | 4.13.2 | JVM test dependency in clients | Verify JUnit and Hamcrest artifact licenses |
+| AndroidX Test ext JUnit / runner | 1.1.5 / 1.5.2 | Android instrumentation regression tests | AndroidX; verify resolved notices |
 
 **NewPipe Extractor is not declared or used in this checkout**: there is no exact version, initialization, primary/fallback role, stream return type or license obligation from a NewPipe dependency to document. The similarly named app-independent upstream project must not be confused with this repository's Piped-compatible HTTP service.
 

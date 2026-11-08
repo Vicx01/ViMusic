@@ -1,21 +1,64 @@
-name: CI
+name: Android CI
 
 on: push
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
-      - name: set up JDK 11
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
         with:
           java-version: "11"
-          distribution: "temurin"
+          distribution: temurin
           cache: gradle
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v2
+      - name: Build debug APK
+        run: .github/scripts/gradle-ci.sh :app:assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
+          name: vimusic-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Run JVM tests and compile instrumentation APK
+        run: .github/scripts/gradle-ci.sh :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
+      - name: Upload instrumentation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-android-test-apk
+          path: app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: error
+
+  instrumentation:
+    runs-on: ubuntu-24.04
+    needs: build
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: temurin
+          cache: gradle
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run playback instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: .github/scripts/gradle-ci.sh :app:connectedDebugAndroidTest
+      - name: Upload Android test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-android-test-results
+          path: app/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore

@@ -32,18 +32,12 @@ import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
-import it.vfsfitvnm.vimusic.service.LoginRequiredException
-import it.vfsfitvnm.vimusic.service.PlayableFormatNotFoundException
-import it.vfsfitvnm.vimusic.service.UnplayableException
-import it.vfsfitvnm.vimusic.service.VideoIdMismatchException
 import it.vfsfitvnm.vimusic.ui.styling.Dimensions
 import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
 import it.vfsfitvnm.vimusic.ui.styling.px
 import it.vfsfitvnm.vimusic.utils.currentWindow
 import it.vfsfitvnm.vimusic.utils.DisposableListener
 import it.vfsfitvnm.vimusic.utils.thumbnail
-import java.net.UnknownHostException
-import java.nio.channels.UnresolvedAddressException
 
 @ExperimentalAnimationApi
 @Composable
@@ -156,16 +150,7 @@ fun Thumbnail(
 
             PlaybackError(
                 isDisplayed = error != null,
-                messageProvider = {
-                    when (error?.cause?.cause) {
-                        is UnresolvedAddressException, is UnknownHostException -> "A network error has occurred"
-                        is PlayableFormatNotFoundException -> "Couldn't find a playable audio format"
-                        is UnplayableException -> "The original video source of this song has been deleted"
-                        is LoginRequiredException -> "This song cannot be played due to server restrictions"
-                        is VideoIdMismatchException -> "The returned video id doesn't match the requested one"
-                        else -> "An unknown playback error has occurred"
-                    }
-                },
+                messageProvider = { error?.let(::playbackErrorDetails) ?: "" },
                 onDismiss = player::prepare
             )
         }
