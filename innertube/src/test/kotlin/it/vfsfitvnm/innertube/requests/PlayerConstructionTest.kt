@@ -4,6 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
@@ -61,4 +63,25 @@ class PlayerConstructionTest {
             assertEquals("WEB_REMIX", SearchBody(query = "fixture", params = "").context.client.clientName)
         } finally { client.close() }
     }
+    @Test
+    fun searchStillUsesWebRemixAndTheSharedMusicHost() = runBlocking {
+        var captured: HttpRequestData? = null
+        val client = HttpClient(MockEngine { request ->
+            captured = request
+            respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }) { configureInnertubeClient() }
+        try {
+            client.post(Innertube.search) { setBody(SearchBody(query = "fixture", params = "")) }
+            val request = checkNotNull(captured)
+            assertEquals("music.youtube.com", request.url.host)
+            assertEquals("/youtubei/v1/search", request.url.encodedPath)
+            assertTrue(request.headers.contains("X-Goog-Api-Key"))
+            val body = request.body as OutgoingContent.ByteArrayContent
+            val root = Json.parseToJsonElement(body.bytes().decodeToString()).jsonObject
+            val clientFields = root.getValue("context").jsonObject.getValue("client").jsonObject
+            assertEquals("WEB_REMIX", clientFields.getValue("clientName").jsonPrimitive.content)
+            assertEquals("1.20220918", clientFields.getValue("clientVersion").jsonPrimitive.content)
+        } finally { client.close() }
+    }
+
 }
