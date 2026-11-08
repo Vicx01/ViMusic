@@ -97,8 +97,11 @@ class LivePlayerProbeTest {
                 val summary = summarizeSuccess(response.bodyAsText())
                 println("PROBE|${probe.label}|http=${response.status.value}|$summary")
             } catch (e: ResponseException) {
-                val summary = try { summarizePlayerErrorBody(e.response.bodyAsText()) } catch (_: Exception) { "unavailable" }
-                println("PROBE|${probe.label}|http=${e.response.status.value}|body=$summary")
+                val summary = try {
+                    val text = e.response.bodyAsText()
+                    "body=${summarizePlayerErrorBody(text)}|message_category=${errorMessageCategory(text)}"
+                } catch (_: Exception) { "body=unavailable|message_category=unavailable" }
+                println("PROBE|${probe.label}|http=${e.response.status.value}|$summary")
             } catch (e: Exception) {
                 // The exception message can contain a URL or credentials: report only a bounded class name.
                 val type = e.javaClass.simpleName.takeIf { it.matches(Regex("[A-Za-z0-9_]{1,80}")) } ?: "OtherException"
@@ -109,6 +112,23 @@ class LivePlayerProbeTest {
         // These cloned clients share the original engine. No further calls are made after closing.
         mobileClient.close()
         queryKeyClient.close()
+    }
+
+    /** Emit categories only, never arbitrary server message text. */
+    private fun errorMessageCategory(text: String): String {
+        val root = try { Json.parseToJsonElement(text) as? JsonObject } catch (_: IllegalArgumentException) { null }
+        val message = ((root?.get("error") as? JsonObject)?.get("message") as? JsonPrimitive)?.content ?: return "absent"
+        return when {
+            message.contains("version", ignoreCase = true) &&
+                (message.contains("unsupported", ignoreCase = true) || message.contains("not supported", ignoreCase = true) ||
+                    message.contains("out of date", ignoreCase = true) || message.contains("no longer", ignoreCase = true)) -> "unsupported_version"
+            message.contains("version", ignoreCase = true) -> "mentions_version"
+            message.contains("precondition", ignoreCase = true) -> "precondition"
+            message.contains("integrity", ignoreCase = true) || message.contains("attestation", ignoreCase = true) -> "integrity_or_attestation"
+            message.contains("not a bot", ignoreCase = true) -> "bot_check"
+            message.contains("authentication", ignoreCase = true) -> "authentication"
+            else -> "other"
+        }
     }
 
     private fun summarizeSuccess(text: String): String {
