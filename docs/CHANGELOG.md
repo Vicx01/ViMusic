@@ -1,5 +1,10 @@
 # Changelog
 
+## Live InnerTube request audit
+
+* Reproduced HTTP 400 `FAILED_PRECONDITION` with the legacy Android Music request, and compared host, key placement, version and identity headers using isolated opt-in Ktor probes. The newer-version and WEB_REMIX controls returned `LOGIN_REQUIRED` without playable formats; no speculative player configuration fix was made. See [the request audit](INNERTUBE_REQUEST_AUDIT.md).
+* Added tests for real player/search request construction and kept the existing shared client configuration unchanged in behavior.
+
 ## Ktor playback failure investigation
 
 * Classified the reported Media3/Ktor cause chain, added privacy-restricted resolver phase/status and audio-range diagnostics, and retained the Ktor exception as a cause without changing the provider.

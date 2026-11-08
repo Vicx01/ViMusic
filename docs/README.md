@@ -5,7 +5,7 @@ This documents the checkout at `6e83b8b83da13b0c275702a0d6d5bff78e24c07a` (app v
 ## Start here
 
 * [Architecture and module map](ARCHITECTURE.md) · [Startup, navigation and UI flow](APP_FLOW.md)
-* [External connections and request contracts](API_INTEGRATIONS.md) · [Playback and 30-second investigation](PLAYBACK_ENGINE.md)
+* [External connections and request contracts](API_INTEGRATIONS.md) · [Playback and 30-second investigation](PLAYBACK_ENGINE.md) · [InnerTube 400 request audit](INNERTUBE_REQUEST_AUDIT.md)
 * [Database and migrations](DATABASE.md) · [Lyrics](LYRICS_SYSTEM.md)
 * [Dependencies and licenses](DEPENDENCIES.md) · [Security and privacy](SECURITY_AND_PRIVACY.md)
 * [Build and testing](BUILD_AND_TESTING.md) · [Known issues and priorities](KNOWN_ISSUES.md)
@@ -17,4 +17,4 @@ Install JDK 11 and Android SDK platform 33 and compatible build tools; configure
 
 ## Evidence and scope
 
-Facts are from repository source/configuration, not live service traffic. API examples are illustrative shapes derived from serializable models, not captured responses. No APK, device, production credentials, current provider behavior or vulnerability scanner was available. The reported playback symptom is not reproduced here. Paths are relative to the repository root; links to source use `../`. See [known issues](KNOWN_ISSUES.md) for confidence and severity.
+Most findings are based on repository source/configuration; API examples are illustrative unless explicitly identified as observed. CI built debug APKs and ran synthetic emulator tests. Opt-in, sanitized provider probes reproduced the reported HTTP 400 and compared request profiles, but no physical-device playback fix was verified. No user credentials or raw provider responses were collected; no vulnerability scanner was run. Paths are relative to the repository root; links to source use `../`. See [known issues](KNOWN_ISSUES.md) for confidence and severity.
