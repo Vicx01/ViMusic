@@ -119,6 +119,7 @@ class LivePlayerProbeTest {
         val root = try { Json.parseToJsonElement(text) as? JsonObject } catch (_: IllegalArgumentException) { null }
         val message = ((root?.get("error") as? JsonObject)?.get("message") as? JsonPrimitive)?.content ?: return "absent"
         return when {
+            message.trim().equals("Precondition check failed.", ignoreCase = true) -> "generic_precondition"
             message.contains("version", ignoreCase = true) &&
                 (message.contains("unsupported", ignoreCase = true) || message.contains("not supported", ignoreCase = true) ||
                     message.contains("out of date", ignoreCase = true) || message.contains("no longer", ignoreCase = true)) -> "unsupported_version"
@@ -140,7 +141,9 @@ class LivePlayerProbeTest {
         val reasonCategory = when {
             reason == null -> "absent"
             reason.contains("not a bot", ignoreCase = true) -> "bot_check"
+            reason.contains("sign in", ignoreCase = true) || reason.contains("sign-in", ignoreCase = true) -> "sign_in"
             reason.contains("age", ignoreCase = true) -> "age_related"
+            reason.contains("not available", ignoreCase = true) || reason.contains("unavailable", ignoreCase = true) -> "unavailable"
             else -> "other"
         }
         val formats = (root["streamingData"] as? JsonObject)?.get("adaptiveFormats") as? JsonArray
