@@ -40,7 +40,8 @@ internal fun playbackErrorDetails(error: PlaybackException): String {
             append("; API-key header: ").append(if (resolverError.apiKeyHeaderPresent) "present" else "absent")
         } else if (audioError != null) {
             val spec = audioError.dataSpec
-            val ranged = spec.position != 0L || spec.length != C.LENGTH_UNSET.toLong()
+            val ranged = spec.position != 0L || spec.length != C.LENGTH_UNSET.toLong() ||
+                spec.httpRequestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
             append("\nAudio request: ").append(if (ranged) "range" else "initial/open-ended")
             append("; position=").append(spec.position).append("; length=").append(spec.length)
             append("\nAudio HTTP ").append(audioError.responseCode)

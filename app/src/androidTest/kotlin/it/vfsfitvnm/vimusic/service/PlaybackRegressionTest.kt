@@ -88,6 +88,10 @@ class PlaybackRegressionTest {
         assertTrue(text.contains("ERROR_CODE_IO_BAD_HTTP_STATUS"))
         assertFalse(text.contains("do-not-show"))
         assertFalse(text.contains("example.test"))
+        val explicitRange = dataSpec.buildUpon().setHttpRequestHeaders(mapOf("Range" to "bytes=0-99")).build()
+        val rangeError = HttpDataSource.InvalidResponseCodeException(416, null, null, emptyMap(), explicitRange, byteArrayOf())
+        val rangeText = playbackErrorDetails(PlaybackException(null, rangeError, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        assertTrue(rangeText.contains("Audio request: range"))
     }
 
     @Test

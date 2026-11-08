@@ -15,6 +15,13 @@ jobs:
           cache: gradle
       - name: Install verified Gradle 7.4
         run: .github/scripts/install-gradle-ci.sh
+      - name: Share verified Gradle distribution with emulator job
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-7.4-ci
+          path: ${{ runner.temp }}/gradle-7.4-bin.zip
+          retention-days: 1
+          if-no-files-found: error
       - name: Build debug APK
         run: .github/scripts/gradle-ci.sh :app:assembleDebug
       - name: Record debug APK SHA-256
@@ -27,6 +34,20 @@ jobs:
           if-no-files-found: error
       - name: Run JVM tests and compile instrumentation APK
         run: .github/scripts/gradle-ci.sh :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
+      - name: Verify resolver JVM tests
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path("innertube/build/test-results/test").glob("TEST-*.xml"))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter("testcase")]
+          required = {"eachRequestPhasePreservesKtorCauseAndReportsOnlySafeMetadata", "unknownBodiesAndUntrustedFieldsAreNotExposed", "networkIoFailureIsNotSwallowedOrReclassified"}
+          executed = {case.get("name") for case in cases if case.find("skipped") is None}
+          failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
+          missing = required - executed
+          print(f"::notice title=Resolver JVM tests::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
+          if missing or failed:
+              raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
+          PY
       - name: Upload instrumentation APK
         uses: actions/upload-artifact@v4
         with:
@@ -46,8 +67,16 @@ jobs:
           java-version: "11"
           distribution: temurin
           cache: gradle
-      - name: Install verified Gradle 7.4
-        run: .github/scripts/install-gradle-ci.sh
+      - name: Download verified Gradle distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: gradle-7.4-ci
+          path: ${{ runner.temp }}
+      - name: Verify and unpack Gradle distribution
+        run: |
+          echo "8cc27038d5dbd815759851ba53e70cf62e481b87494cc97cfd97982ada5ba634  $RUNNER_TEMP/gradle-7.4-bin.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle-7.4-bin.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-7.4/bin/gradle" >> "$GITHUB_ENV"
       - name: Set up JDK 17 for Android command-line tools
         uses: actions/setup-java@v4
         with:
