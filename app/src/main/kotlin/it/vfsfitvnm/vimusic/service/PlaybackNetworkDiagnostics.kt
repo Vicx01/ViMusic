@@ -16,19 +16,21 @@ internal object PlaybackNetworkDiagnostics : TransferListener {
 
     override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) {
         if (!isNetwork) return
-        val headers = source.responseHeaders
-        fun header(name: String, pattern: Regex): String = headers.entries
-            .firstOrNull { it.key.equals(name, ignoreCase = true) }
-            ?.value?.firstOrNull()?.takeIf { pattern.matches(it) } ?: "absent or invalid"
-
         Log.d(
             "PlaybackHttp",
             "position=${dataSpec.position} length=${dataSpec.length} " +
                 "status=${(source as? HttpDataSource)?.responseCode ?: -1} " +
-                "Content-Length=${header("Content-Length", contentLengthPattern)} " +
-                "Content-Range=${header("Content-Range", contentRangePattern)} " +
-                "Accept-Ranges=${header("Accept-Ranges", acceptRangesPattern)}"
+                safeAudioResponseHeaders(source.responseHeaders)
         )
+    }
+
+    internal fun safeAudioResponseHeaders(headers: Map<String, List<String>>): String {
+        fun header(name: String, pattern: Regex): String = headers.entries
+            .firstOrNull { it.key.equals(name, ignoreCase = true) }
+            ?.value?.firstOrNull()?.takeIf { pattern.matches(it) } ?: "absent or invalid"
+        return "Content-Length=${header("Content-Length", contentLengthPattern)} " +
+            "Content-Range=${header("Content-Range", contentRangePattern)} " +
+            "Accept-Ranges=${header("Accept-Ranges", acceptRangesPattern)}"
     }
 
     override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) = Unit

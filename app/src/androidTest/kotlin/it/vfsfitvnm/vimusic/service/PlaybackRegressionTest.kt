@@ -71,11 +71,16 @@ class PlaybackRegressionTest {
     fun errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls() {
         val dataSpec = DataSpec.Builder().setUri("https://example.test/?secret=do-not-show").build()
         val response = HttpDataSource.InvalidResponseCodeException(
-            403, "do-not-show", null, emptyMap(), dataSpec, "do-not-show".toByteArray()
+            403, "do-not-show", null, mapOf("Content-Length" to listOf("123"),
+                "Content-Range" to listOf("do-not-show"), "Set-Cookie" to listOf("do-not-show")),
+            dataSpec, "do-not-show".toByteArray()
         )
         val error = PlaybackException("do-not-show", response, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
         val text = playbackErrorDetails(error)
-        assertTrue(text.contains("HTTP 403"))
+        assertTrue(text.contains("Audio HTTP 403"))
+        assertTrue(text.contains("Audio request: initial/open-ended"))
+        assertTrue(text.contains("Content-Length=123"))
+        assertTrue(text.contains("Content-Range=absent or invalid"))
         assertTrue(text.contains("InvalidResponseCodeException"))
         assertTrue(text.contains("ERROR_CODE_IO_BAD_HTTP_STATUS"))
         assertFalse(text.contains("do-not-show"))

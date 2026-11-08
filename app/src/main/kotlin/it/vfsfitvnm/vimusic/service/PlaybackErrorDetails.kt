@@ -1,5 +1,6 @@
 package it.vfsfitvnm.vimusic.service
 
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
 import it.vfsfitvnm.innertube.requests.PlayerRequestException
@@ -27,8 +28,7 @@ internal fun playbackErrorDetails(error: PlaybackException): String {
         causes.any { it is VideoIdMismatchException } -> "The returned video id doesn't match the requested one"
         else -> "Playback failed"
     }
-    val status = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
-        .firstOrNull()?.responseCode
+    val audioError = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
     return buildString {
         append(summary)
         append("\n").append(error.errorCodeName).append(" (").append(error.errorCode).append(")")
@@ -38,7 +38,15 @@ internal fun playbackErrorDetails(error: PlaybackException): String {
             append("\nResponse: ").append(resolverError.responseSummary)
             append("\nFinal host: ").append(resolverError.finalOrigin)
             append("; API-key header: ").append(if (resolverError.apiKeyHeaderPresent) "present" else "absent")
-        } else if (status != null) append("\nAudio HTTP ").append(status)
+        } else if (audioError != null) {
+            val spec = audioError.dataSpec
+            val ranged = spec.position != 0L || spec.length != C.LENGTH_UNSET.toLong()
+            append("\nAudio request: ").append(if (ranged) "range" else "initial/open-ended")
+            append("; position=").append(spec.position).append("; length=").append(spec.length)
+            append("\nAudio HTTP ").append(audioError.responseCode)
+            append("\n").append(PlaybackNetworkDiagnostics.safeAudioResponseHeaders(audioError.headerFields))
+            append("\nResponse body: omitted")
+        }
         append("\nCause: ").append(causes.joinToString(" → ") { it.javaClass.simpleName })
     }
 }
