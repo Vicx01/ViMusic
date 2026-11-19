@@ -36,7 +36,11 @@ safe = sanitize(result.stdout)
 label = next((arg for arg in arguments if arg.startswith(':')), 'Gradle')
 if result.returncode:
     # The full log is not uploaded; annotations contain a bounded, sanitized tail.
-    excerpt = '\n'.join(safe.splitlines()[-55:])[-10000:]
+    lines = safe.splitlines()
+    start = next((i for i, line in enumerate(lines) if '* What went wrong:' in line), None)
+    primary = '\n'.join(lines[start:start + 40])[:7000] if start is not None else '\n'.join(lines[-40:])[:7000]
+    tail = '\n'.join(lines[-12:])[-2500:]
+    excerpt = primary + '\n--- tail ---\n' + tail
     escaped = excerpt.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
     print(f'::error title=InnerTubeX compatibility failed::{escaped}')
 else:

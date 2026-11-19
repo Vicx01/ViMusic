@@ -28,7 +28,7 @@ dependencies {
 // Record the real artifacts without printing local cache paths or credentials.
 tasks.register("writeResolvedArtifacts") {
     doLast {
-        val names = listOf("debugRuntimeClasspath", "debugUnitTestRuntimeClasspath")
+        val names = listOf("debugRuntimeClasspath")
         val reportDirectory = rootProject.layout.buildDirectory.dir("reports/compat").get().asFile
         reportDirectory.mkdirs()
         for (name in names) {

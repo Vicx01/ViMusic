@@ -6,6 +6,8 @@ The first GitHub Actions run ([44558480566](https://github.com/Vicx01/ViMusic/ac
 
 The second run ([44558815435](https://github.com/Vicx01/ViMusic/actions/runs/44558815435)) reported that SDK package `platforms;android-37` was not found. Dependency resolution and compilation were skipped. The workflow now recognizes the runner package `platforms;android-37.0`; that update requires a new run.
 
+The third run ([44558979481](https://github.com/Vicx01/ViMusic/actions/runs/44558979481)) installed SDK 37 and Gradle, but the artifact-reporting task failed resolving the test-runtime variant of `:probe`. It did not reach dependency tree reporting or compilation. The task has been narrowed to the production runtime configuration, and error summaries now preserve the primary cause. A new run is required.
+
 Original preparation status: prepared, **not executed**. Neither the actual InnerTubeX v0.11.6 artifact nor
 its transitive dependencies have been resolved or compiled in this workspace.
 This environment has no Android SDK/Gradle and is network-restricted. The user

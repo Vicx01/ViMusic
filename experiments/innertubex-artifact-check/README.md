@@ -25,7 +25,7 @@ gradle -p experiments/innertubex-artifact-check :probe:assembleDebug :probe:test
 ```
 
 The CI workflow records compile/runtime/test dependency trees, insights and
-artifact identities/SHA-256 hashes for runtime and test classpaths. Hashes identify
+artifact identities/SHA-256 hashes for the production runtime classpath. Hashes identify
 the downloaded artifacts; they are not compared to independently trusted hashes.
 No signed URLs, cookies, tokens, API keys or real song streams are needed. The
 main repository's Gradle 7.4 wrapper must not be used for this project. Do not
