@@ -1,0 +1,136 @@
+name: InnerTubeX compatibility
+
+on:
+  push:
+    paths:
+      - 'experiments/innertubex-artifact-check/**'
+      - 'experiments/innertubex-compat/**'
+      - '.github/scripts/innertubex-gradle.py'
+      - '.github/workflows/innertubex-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 37
+        run: sdkmanager 'platforms;android-37'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Resolve real artifact and record hashes
+        run: python3 .github/scripts/innertubex-gradle.py --project experiments/innertubex-artifact-check -- :probe:writeResolvedArtifacts
+      - name: Summarize resolved dependencies
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          report = Path('experiments/innertubex-artifact-check/build/reports/compat/debugRuntimeClasspath-artifacts.txt')
+          pattern = re.compile(r'^([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([A-Za-z0-9_.+-]+) \| ([A-Za-z0-9_.+-]+) \| sha256=([0-9a-f]{64})$')
+          allowed = ('com.github.MetrolistGroup.', 'io.ktor', 'org.jetbrains.kotlin', 'org.jetbrains.kotlinx')
+          selected = []
+          for line in report.read_text().splitlines():
+              match = pattern.fullmatch(line)
+              if match and match.group(1).startswith(allowed):
+                  selected.append(':'.join(match.group(i) for i in (1, 2, 3)))
+          if not any(item.startswith('com.github.MetrolistGroup.innertubex:innertubex-android:') for item in selected):
+              raise SystemExit('Expected artifact missing from sanitized summary')
+          summary = '\n'.join(selected)[:9000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=Resolved InnerTubeX dependencies::' + summary)
+          PY
+      - name: Capture dependency trees and insights
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=experiments/innertubex-artifact-check
+          reports="$project/build/reports/compat"
+          for configuration in debugCompileClasspath debugRuntimeClasspath debugUnitTestRuntimeClasspath; do
+            python3 .github/scripts/innertubex-gradle.py --project "$project" --report "$reports/$configuration-tree.txt" -- :probe:dependencies --configuration "$configuration"
+          done
+          for dependency in innertubex-android ktor-client-core kotlinx-coroutines-core kotlinx-serialization-json kotlin-stdlib quackjs; do
+            python3 .github/scripts/innertubex-gradle.py --project "$project" --report "$reports/insight-$dependency.txt" -- :probe:dependencyInsight --configuration debugRuntimeClasspath --dependency "$dependency"
+          done
+      - name: Compile and test real artifact
+        run: python3 .github/scripts/innertubex-gradle.py --project experiments/innertubex-artifact-check -- :probe:assembleDebug :probe:testDebugUnitTest
+      - name: Verify actual artifact test executed
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root = Path('experiments/innertubex-artifact-check/probe/build/test-results/testDebugUnitTest')
+          cases = [case for path in root.glob('TEST-*.xml') for case in ET.parse(path).getroot().iter('testcase')]
+          selected = [case for case in cases if case.get('name') == 'actualArtifactSupportsDirectAudioHints']
+          if len(selected) != 1 or any(selected[0].find(tag) is not None for tag in ('failure', 'error', 'skipped')):
+              raise SystemExit('The real-artifact test did not execute successfully')
+          print('::notice title=InnerTubeX artifact test::Actual artifact test passed.')
+          PY
+      - name: Upload dependency and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: innertubex-artifact-check-reports
+          path: |
+            experiments/innertubex-artifact-check/build/reports/compat/
+            experiments/innertubex-artifact-check/probe/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+
+  prototype:
+    needs: real-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 37
+        run: sdkmanager 'platforms;android-37'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Compile prototype and run offline unit tests
+        run: python3 .github/scripts/innertubex-gradle.py --project experiments/innertubex-compat -- :adapter:assembleDebug :adapter:testDebugUnitTest
+      - name: Verify prototype tests executed
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          reports = list(Path('experiments/innertubex-compat/adapter/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          required = {
+              'constructionAndCleanupRequireNoNetwork',
+              'preservesStreamFieldsButRedactsDiagnosticString',
+              'explicitlyFlagsBothBoundedAndChunkedStreams',
+              'cacheExpiresAndDoesNotCrossSessionGenerations',
+              'unknownExpiryAndInvalidationDoNotReuseUrls',
+          }
+          executed = {case.get('name') for case in cases if case.find('skipped') is None}
+          failed = {case.get('name') for case in cases if case.find('failure') is not None or case.find('error') is not None}
+          missing = required - executed
+          if missing or failed:
+              raise SystemExit(f'Missing: {sorted(missing)}; failed: {sorted(failed)}')
+          print(f'::notice title=Playback prototype tests::Executed {len(executed)} cases; no failures.')
+          PY
+      - name: Report resolved runtime dependencies
+        run: python3 .github/scripts/innertubex-gradle.py --project experiments/innertubex-compat --report experiments/innertubex-compat/build/reports/compat/runtime-tree.txt -- :adapter:dependencies --configuration debugRuntimeClasspath
+      - name: Upload prototype reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: innertubex-playback-prototype-reports
+          path: |
+            experiments/innertubex-compat/build/reports/compat/
+            experiments/innertubex-compat/adapter/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
