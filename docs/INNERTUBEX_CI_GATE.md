@@ -2,7 +2,9 @@
 
 ## Status
 
-Prepared, **not executed**. Neither the actual InnerTubeX v0.11.6 artifact nor
+The first GitHub Actions run ([44558480566](https://github.com/Vicx01/ViMusic/actions/runs/44558480566)) failed in `android-actions/setup-android@v3` before SDK installation, dependency resolution or compilation. Its detailed action log was not accessible from the sandbox, so the underlying cause is unknown. No dependency or test reports were produced. The workflow now tries the Android SDK already installed on the hosted runner, installing API 37 only if absent. That correction has not yet been validated.
+
+Original preparation status: prepared, **not executed**. Neither the actual InnerTubeX v0.11.6 artifact nor
 its transitive dependencies have been resolved or compiled in this workspace.
 This environment has no Android SDK/Gradle and is network-restricted. The user
 asked not to retry downloads and not to push without approval. Upstream Vivi's

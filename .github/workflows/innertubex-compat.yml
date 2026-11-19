@@ -22,9 +22,26 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK 37
-        run: sdkmanager 'platforms;android-37'
+      - name: Verify or install Android SDK 37
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?GitHub runner has no ANDROID_HOME}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          if [ -f "$ANDROID_HOME/platforms/android-37/android.jar" ]; then
+            echo 'Android API 37 is already installed on the hosted runner.'
+          else
+            if ! sdkmanager --install 'platforms;android-37' >"$RUNNER_TEMP/compat-sdk.log" 2>&1; then
+              python3 - "$RUNNER_TEMP/compat-sdk.log" <<'PYSDK'
+          import pathlib, re, sys
+          text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
+          text = re.sub(r'https?://[^\s]+', '[redacted-url]', text)
+          text = '\n'.join(text.splitlines()[-30:])[-5000:]
+          print('::error title=Android SDK setup failed::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYSDK
+              exit 1
+            fi
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
@@ -94,9 +111,26 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK 37
-        run: sdkmanager 'platforms;android-37'
+      - name: Verify or install Android SDK 37
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?GitHub runner has no ANDROID_HOME}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          if [ -f "$ANDROID_HOME/platforms/android-37/android.jar" ]; then
+            echo 'Android API 37 is already installed on the hosted runner.'
+          else
+            if ! sdkmanager --install 'platforms;android-37' >"$RUNNER_TEMP/compat-sdk.log" 2>&1; then
+              python3 - "$RUNNER_TEMP/compat-sdk.log" <<'PYSDK'
+          import pathlib, re, sys
+          text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
+          text = re.sub(r'https?://[^\s]+', '[redacted-url]', text)
+          text = '\n'.join(text.splitlines()[-30:])[-5000:]
+          print('::error title=Android SDK setup failed::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYSDK
+              exit 1
+            fi
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
