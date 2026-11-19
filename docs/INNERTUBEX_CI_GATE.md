@@ -2,6 +2,8 @@
 
 ## Status
 
+**Update:** the isolated real-artifact gate and the separate playback prototype passed in [run 44559276210](https://github.com/Vicx01/ViMusic/actions/runs/44559276210). See [CI results](INNERTUBEX_CI_RESULTS.md) for resolved versions, report links and remaining production risks. The earlier status below records the history before that run.
+
 The first GitHub Actions run ([44558480566](https://github.com/Vicx01/ViMusic/actions/runs/44558480566)) failed in `android-actions/setup-android@v3` before SDK installation, dependency resolution or compilation. Its detailed action log was not accessible from the sandbox, so the underlying cause is unknown. No dependency or test reports were produced. The workflow now tries the Android SDK already installed on the hosted runner, installing API 37 only if absent. That correction has not yet been validated.
 
 The second run ([44558815435](https://github.com/Vicx01/ViMusic/actions/runs/44558815435)) reported that SDK package `platforms;android-37` was not found. Dependency resolution and compilation were skipped. The workflow now recognizes the runner package `platforms;android-37.0`; that update requires a new run.
