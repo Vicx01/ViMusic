@@ -22,9 +22,14 @@ if case == 'room252':
     text = text.replace('version("room", "2.5.0-beta01")', 'version("room", "2.5.2")')
 elif case == 'room261':
     text = text.replace('version("room", "2.5.0-beta01")', 'version("room", "2.6.1")')
-elif case not in ('baseline', 'kotlin19', 'static'):
+elif case not in ('baseline', 'kotlin19', 'static', 'metadata062'):
     raise SystemExit('Unknown diagnostic case')
 settings.write_text(text)
+if case == 'metadata062':
+    build = project / 'app/build.gradle.kts'
+    data = build.read_text()
+    assert data.count('    kapt(libs.room.compiler)') == 1
+    build.write_text(data.replace('    kapt(libs.room.compiler)', '    kapt(libs.room.compiler)\n    kapt("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.6.2")'))
 if case == 'static':
     source = project / 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
     data = source.read_text()
@@ -44,6 +49,14 @@ lines = run.stdout.splitlines()
 errors = [line.strip() for line in lines if 'error:' in line or 'What went wrong:' in line or 'BUILD FAILED' in line or 'BUILD SUCCESSFUL' in line]
 errors = [re.sub(r'https?://\S+', '[redacted-url]', line) for line in errors if 'Converters' in line or line in ('* What went wrong:', 'BUILD FAILED', 'BUILD SUCCESSFUL')]
 summary = [f'case={case}', f'gradle_exit={run.returncode}', *errors[-12:]]
+if run.returncode:
+    start = next((i for i, line in enumerate(lines) if line.strip() == '* What went wrong:'), None)
+    if start is not None:
+        for line in lines[start + 1:start + 8]:
+            if re.search(r'authorization|cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.IGNORECASE):
+                summary.append('cause: [redacted sensitive line]')
+            else:
+                summary.append('cause: ' + re.sub(r'https?://\S+', '[redacted-url]', line.strip())[:500])
 graph = subprocess.run([exe, '--no-daemon', '--console=plain', ':app:dependencies', '--configuration', 'kapt'], cwd=project, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
 summary.append(f'kapt_graph_exit={graph.returncode}')
 for line in graph.stdout.splitlines():
