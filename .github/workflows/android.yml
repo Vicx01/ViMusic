@@ -68,6 +68,17 @@ jobs:
           if missing or failed:
               raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
           PY
+      - name: Verify lyrics serialization regression test
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('kugou/build/test-results/test').glob('TEST-*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          selected = [case for case in cases if case.get('name') == 'lyricsProviderModelsDeserializeWithUnknownFields']
+          if len(selected) != 1 or any(selected[0].find(tag) is not None for tag in ('failure', 'error', 'skipped')):
+              raise SystemExit('Lyrics serialization regression test did not execute successfully')
+          print('::notice title=Lyrics serialization regression::Offline model fixture passed.')
+          PY
       - name: Upload instrumentation APK
         uses: actions/upload-artifact@v4
         with:

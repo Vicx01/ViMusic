@@ -14,7 +14,7 @@ dependencyResolutionManagement {
             version("kotlin", "1.8.22")
             plugin("kotlin-serialization","org.jetbrains.kotlin.plugin.serialization").versionRef("kotlin")
 
-            library("kotlin-coroutines","org.jetbrains.kotlinx", "kotlinx-coroutines-core").version("1.6.4")
+            library("kotlin-coroutines","org.jetbrains.kotlinx", "kotlinx-coroutines-core").version("1.7.1")
 
             version("compose-compiler", "1.4.8")
 
@@ -37,7 +37,7 @@ dependencyResolutionManagement {
             version("media3", "1.0.0-beta03")
             library("exoplayer", "androidx.media3", "media3-exoplayer").versionRef("media3")
 
-            version("ktor", "2.1.2")
+            version("ktor", "2.3.12")
             library("ktor-client-mock", "io.ktor", "ktor-client-mock").versionRef("ktor")
             library("ktor-client-core", "io.ktor", "ktor-client-core").versionRef("ktor")
             library("ktor-client-cio", "io.ktor", "ktor-client-okhttp").versionRef("ktor")
