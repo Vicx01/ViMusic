@@ -22,7 +22,9 @@ All shared Ktor dependencies moved from **2.1.2 to 2.3.12**, and the direct coro
 
 ## Kotlin 1.9 checkpoint
 
-The next step changes both Kotlin Gradle and serialization plugins from **1.8.22 to 1.9.25**, and the Compose compiler from **1.4.8 to 1.5.15**, to bring the compiler forward while retaining Kotlin 1.x. The [Compose compatibility map](https://developer.android.com/jetpack/androidx/releases/compose-kotlin) pairs these versions, and [Kotlin's Gradle compatibility table](https://kotlinlang.org/docs/gradle-configure-project.html) lists Gradle 7.4 and AGP 7.3.0 in the supported ranges for this Kotlin plugin. No Gradle, AGP, Ktor, coroutines, Compose runtime, Room or Media3 versions are explicitly changed in this step. CI must verify the resolved graph, build and both emulator suites before proceeding.
+An attempted checkpoint changed both Kotlin Gradle and serialization plugins from **1.8.22 to 1.9.25** and the Compose compiler from **1.4.8 to 1.5.15**; the [Compose compatibility map](https://developer.android.com/jetpack/androidx/releases/compose-kotlin) pairs these versions. [Run 45203656601](https://github.com/Vicx01/ViMusic/actions/runs/45203656601) failed during debug APK compilation. Room 2.5.0-beta01 generated `Database_Impl.java` that calls `new Converters()`, but `Converters` is a Kotlin object with a private constructor. No debug APK or emulator test result exists for that upgrade. The build did not establish the underlying cause, and no database or converter behavior was changed to mask it.
+
+The version declarations were restored to the last passing **Kotlin 1.8.22 / Compose compiler 1.4.8** checkpoint while preserving **Ktor 2.3.12 / coroutines 1.7.1**. The recovery build needs its own CI validation. Stop further dependency upgrades until the Room/Kotlin interoperability issue is investigated with database migration and persistence coverage; do not remove features, alter schemas or delete user data as a workaround.
 
 ## Dependency and build boundaries
 
