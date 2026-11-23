@@ -41,6 +41,8 @@ See the [source audit and developer documentation](docs/README.md), including [p
 
 ## Installation
 
+Development builds on this branch require Android 8.0 (API 26) or newer.
+
 [<img src="https://github.com/machiav3lli/oandbackupx/blob/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png"
     alt="Get it on GitHub"
     height="80">](https://github.com/vfsfitvnm/ViMusic/releases/latest)

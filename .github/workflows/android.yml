@@ -24,6 +24,18 @@ jobs:
           if-no-files-found: error
       - name: Build debug APK
         run: .github/scripts/gradle-ci.sh :app:assembleDebug
+      - name: Verify packaged minimum Android version
+        shell: bash
+        run: |
+          set -euo pipefail
+          aapt=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -x "$aapt"
+          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/vimusic-apk-badging.txt"
+          if ! grep -Fx "sdkVersion:'26'" "$RUNNER_TEMP/vimusic-apk-badging.txt" >/dev/null; then
+            echo '::error::Debug APK must require Android API 26.'
+            exit 1
+          fi
+          echo '::notice title=Minimum Android version::Debug APK requires API 26.'
       - name: Record debug APK SHA-256
         run: echo "::notice title=Debug APK SHA-256::$(sha256sum app/build/outputs/apk/debug/app-debug.apk | cut -d' ' -f1)"
       - name: Upload debug APK

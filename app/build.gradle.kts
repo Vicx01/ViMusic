@@ -9,7 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "it.vfsfitvnm.vimusic"
-        minSdk = 21
+        // InnerTubeX migration baseline: Android 8.0 and later.
+        minSdk = 26
         targetSdk = 33
         versionCode = 20
         versionName = "0.5.4"
