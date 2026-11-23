@@ -162,11 +162,13 @@ jobs:
               "loaderWrapsNonIoAndForwardsResolverIo",
               "httpRangesAndResponseHeadersFollowTheRequestedDataSpec",
               "continuousPlaybackPassesFirst512KiBAndThirtySeconds",
+              "queuedMediaItemPersistsThroughExistingConvertersAfterReopen",
+              "mediaItemConvertersHandleNullAndRoundTrip",
           }
           executed = {case.get("name") for case in cases if case.find("skipped") is None}
           failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
           missing = required - executed
-          print(f"::notice title=Playback instrumentation results::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
+          print(f"::notice title=Playback and database instrumentation results::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
           if missing or failed:
               raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
           PY

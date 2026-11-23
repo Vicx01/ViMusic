@@ -1,0 +1,47 @@
+name: Room Kotlin isolated diagnostics
+
+on:
+  push:
+    paths:
+      - '.github/workflows/room-kotlin-diagnostic.yml'
+      - '.github/scripts/room-kotlin-experiment.py'
+      - 'app/src/androidTest/kotlin/it/vfsfitvnm/vimusic/DatabasePersistenceTest.kt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-cases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [baseline, kotlin19, room252, room261, static]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+      - name: Install verified Gradle 7.4
+        run: .github/scripts/install-gradle-ci.sh
+      - name: Create disposable project copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/room-interop-copy"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/room-interop-copy"
+      - name: Compile and inspect generated Room code
+        env:
+          ROOM_DIAGNOSTIC_CASE: ${{ matrix.case }}
+        run: python3 .github/scripts/room-kotlin-experiment.py
+      - name: Upload sanitized diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-diagnostic-${{ matrix.case }}
+          path: ${{ runner.temp }}/room-interop-report/
+          if-no-files-found: warn
