@@ -6,6 +6,12 @@ The [isolated compatibility run](https://github.com/Vicx01/ViMusic/actions/runs/
 
 The first production checkpoint raises only the app's `defaultConfig.minSdk` from 21 to 26 (Android 8.0). This intentionally ends support for devices below API 26. There are no product flavors or per-build-type minSdk overrides; the setting applies to both debug and release. The three Compose Android libraries still declare 21: they may support an older minimum than their consuming app and need not change just to raise the app minimum. The remaining existing modules are Kotlin/JVM modules. No data, database schema, app ID, provider, target SDK, compile SDK or playback code changes in this checkpoint. CI verifies the packaged debug APK actually declares API 26, then runs the existing JVM and API 29 emulator suites. API 26 and release-device behavior are not established by that emulator run.
 
+## Toolchain evidence and API 26 gate
+
+The [InnerTubeX v0.11.6 source catalog](https://github.com/MetrolistGroup/innertubex/blob/64c7df4d88d27e6964157b3b341f7ec70f88ea6e/gradle/libs.versions.toml) declares Kotlin **2.4.21**, AGP **9.4.1**, Ktor **3.6.0**, and compileSdk **37**; its [wrapper](https://github.com/MetrolistGroup/innertubex/blob/64c7df4d88d27e6964157b3b341f7ec70f88ea6e/gradle/wrapper/gradle-wrapper.properties) declares Gradle **9.8.2**. Those are its producer build versions, not established minimum consumer versions. The real published artifact and prototype compiled in [run 44559276210](https://github.com/Vicx01/ViMusic/actions/runs/44559276210) with Kotlin plugin **2.3.10**, AGP **9.1.1**, Gradle **9.3.1**, JDK **21**, and SDK 37. This is one demonstrated compatible isolated consumer toolchain; the oldest compatible compiler, AGP and Gradle versions have not been established, and whole-app compatibility still requires testing.
+
+The existing debug APK is now explicitly installed on API 26 and API 29 emulators before the instrumentation suite runs. The test jobs verify the actual emulator API and use distinct report artifacts. Emulator tests do not replace a physical-device playback test. API 26 CI execution is pending until its run completes.
+
 ## Dependency and build boundaries
 
 | Area | Current production declarations | Isolated successful consumer | Migration concern |

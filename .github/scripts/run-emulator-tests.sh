@@ -3,13 +3,16 @@ set -euo pipefail
 
 # Current Android command-line tools need Java 17. Gradle/AGP for this project use Java 11.
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-sdkmanager --install 'system-images;android-29;google_apis;x86_64' >"${RUNNER_TEMP}/vimusic-sdk.log" 2>&1 || { tail -n 40 "${RUNNER_TEMP}/vimusic-sdk.log"; exit 1; }
-echo 'Installed emulator system image.'
+api="${VIMUSIC_EMULATOR_API:-29}"
+case "$api" in 26|29) ;; *) echo "Unsupported emulator API: $api" >&2; exit 1 ;; esac
+image="system-images;android-${api};google_apis;x86_64"
+sdkmanager --install "$image" >"${RUNNER_TEMP}/vimusic-sdk.log" 2>&1 || { tail -n 40 "${RUNNER_TEMP}/vimusic-sdk.log"; exit 1; }
+echo "Installed emulator system image for API $api."
 ls -l /dev/kvm || true
 emulator -accel-check || true
 export ANDROID_AVD_HOME="${RUNNER_TEMP}/vimusic-avds"
 mkdir -p "$ANDROID_AVD_HOME"
-printf 'no\n' | avdmanager create avd --force --name vimusic-test --path "$ANDROID_AVD_HOME/vimusic-test.avd" --package 'system-images;android-29;google_apis;x86_64'
+printf 'no\n' | avdmanager create avd --force --name vimusic-test --path "$ANDROID_AVD_HOME/vimusic-test.avd" --package "$image"
 echo 'AVD directory:'
 ls -la "$ANDROID_AVD_HOME"
 emulator -list-avds
@@ -31,6 +34,14 @@ trap cleanup EXIT
 
 timeout 150 adb wait-for-device
 timeout 240 bash -c 'until adb shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; do sleep 3; done'
+actual_api=$(adb shell getprop ro.build.version.sdk | tr -d '\r\n')
+if [ "$actual_api" != "$api" ]; then
+    echo "Expected emulator API $api, got $actual_api" >&2
+    exit 1
+fi
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell pm path it.vfsfitvnm.vimusic.debug | grep -q '^package:'
+echo "Verified debug APK installation on API $api."
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
