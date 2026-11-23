@@ -41,7 +41,10 @@ if [ "$actual_api" != "$api" ]; then
 fi
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell pm path it.vfsfitvnm.vimusic.debug | grep -q '^package:'
-echo "Verified debug APK installation on API $api."
+echo "Verified build-job debug APK installation on API $api."
+# This AVD is newly created for CI. The instrumentation job recompiles with a
+# different ephemeral debug signing key, so remove only this CI installation.
+adb uninstall it.vfsfitvnm.vimusic.debug
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
