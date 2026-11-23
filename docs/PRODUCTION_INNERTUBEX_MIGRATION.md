@@ -18,7 +18,11 @@ The first staged compiler change upgrades the Kotlin Gradle and serialization pl
 
 ## Ktor upgrade checkpoint
 
-Next, all shared Ktor dependencies move from **2.1.2 to 2.3.12**, and the direct coroutines declaration moves from **1.6.4 to 1.7.1**. This is a transitional Ktor 2.x checkpoint towards the artifact's Ktor 3.6.0, not a claim that Ktor 3 is compatible. [Ktor 2.3.12's catalog](https://github.com/ktorio/ktor/blob/2.3.12/gradle/libs.versions.toml) declares Kotlin 1.8.22, coroutines 1.7.1, and serialization 1.5.1, making it a matched step for the current compiler; inspect the actually resolved graph rather than assuming those versions. No client, provider, Compose runtime, Room or Media3 code is removed. An offline lyrics-model serialization fixture is added to CI alongside the existing request and playback tests. CI must pass before moving to another upgrade.
+All shared Ktor dependencies moved from **2.1.2 to 2.3.12**, and the direct coroutines declaration moved from **1.6.4 to 1.7.1**. This is a transitional Ktor 2.x checkpoint towards the artifact's Ktor 3.6.0, not a claim that Ktor 3 is compatible. [Ktor 2.3.12's catalog](https://github.com/ktorio/ktor/blob/2.3.12/gradle/libs.versions.toml) declares Kotlin 1.8.22, coroutines 1.7.1, and serialization 1.5.1. [Run 45201562163](https://github.com/Vicx01/ViMusic/actions/runs/45201562163) passed the complete existing CI, the new offline lyrics-model serialization fixture and the API 26/29 install and instrumentation jobs. Its [runtime graph](https://github.com/Vicx01/ViMusic/actions/runs/45201562163/artifacts/14831648401) selected Ktor 2.3.12, coroutines 1.7.1, serialization 1.5.1, Kotlin stdlib 1.9.21 and stdlib-jdk7/jdk8 1.8.22. No client, provider, Compose runtime, Room or Media3 code was removed.
+
+## Kotlin 1.9 checkpoint
+
+The next step changes both Kotlin Gradle and serialization plugins from **1.8.22 to 1.9.25**, and the Compose compiler from **1.4.8 to 1.5.15**, to bring the compiler forward while retaining Kotlin 1.x. The [Compose compatibility map](https://developer.android.com/jetpack/androidx/releases/compose-kotlin) pairs these versions, and [Kotlin's Gradle compatibility table](https://kotlinlang.org/docs/gradle-configure-project.html) lists Gradle 7.4 and AGP 7.3.0 in the supported ranges for this Kotlin plugin. No Gradle, AGP, Ktor, coroutines, Compose runtime, Room or Media3 versions are explicitly changed in this step. CI must verify the resolved graph, build and both emulator suites before proceeding.
 
 ## Dependency and build boundaries
 
