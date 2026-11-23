@@ -46,6 +46,14 @@ jobs:
           if-no-files-found: error
       - name: Run JVM tests and compile instrumentation APK
         run: .github/scripts/gradle-ci.sh :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
+      - name: Capture production dependency baseline
+        run: python3 .github/scripts/production-dependency-baseline.py
+      - name: Upload production dependency baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-production-dependency-baseline
+          path: build/reports/production-dependencies/
+          if-no-files-found: error
       - name: Verify resolver JVM tests
         run: |
           python3 - <<'PY'
