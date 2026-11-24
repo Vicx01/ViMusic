@@ -7,19 +7,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 11
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "11"
+          java-version: "21"
           distribution: temurin
           cache: gradle
-      - name: Install verified Gradle 7.4
+      - name: Install verified Gradle 9.3.1
         run: .github/scripts/install-gradle-ci.sh
       - name: Share verified Gradle distribution with emulator job
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-7.4-ci
-          path: ${{ runner.temp }}/gradle-7.4-bin.zip
+          name: gradle-9.3.1-ci
+          path: ${{ runner.temp }}/gradle-9.3.1-bin.zip
           retention-days: 1
           if-no-files-found: error
       - name: Build debug APK
@@ -96,22 +96,22 @@ jobs:
         api: [26, 29]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 11
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: "11"
+          java-version: "21"
           distribution: temurin
           cache: gradle
       - name: Download verified Gradle distribution
         uses: actions/download-artifact@v4
         with:
-          name: gradle-7.4-ci
+          name: gradle-9.3.1-ci
           path: ${{ runner.temp }}
       - name: Verify and unpack Gradle distribution
         run: |
-          echo "8cc27038d5dbd815759851ba53e70cf62e481b87494cc97cfd97982ada5ba634  $RUNNER_TEMP/gradle-7.4-bin.zip" | sha256sum --check
-          unzip -q "$RUNNER_TEMP/gradle-7.4-bin.zip" -d "$RUNNER_TEMP"
-          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-7.4/bin/gradle" >> "$GITHUB_ENV"
+          echo "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06  $RUNNER_TEMP/gradle-9.3.1-bin.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle-9.3.1-bin.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-9.3.1/bin/gradle" >> "$GITHUB_ENV"
       - name: Download debug APK from build job
         uses: actions/download-artifact@v4
         with:
@@ -132,6 +132,7 @@ jobs:
           VIMUSIC_EMULATOR_API: ${{ matrix.api }}
         run: |
           set +e
+          export VIMUSIC_GRADLE_JAVA_HOME="$JAVA_HOME_21_X64"
           .github/scripts/run-emulator-tests.sh > "$RUNNER_TEMP/emulator-tests.log" 2>&1
           result=$?
           tail -n 120 "$RUNNER_TEMP/emulator-tests.log"
@@ -207,19 +208,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
-          java-version: "11"
+          java-version: "21"
           distribution: temurin
           cache: gradle
       - name: Download verified Gradle distribution
         uses: actions/download-artifact@v4
         with:
-          name: gradle-7.4-ci
+          name: gradle-9.3.1-ci
           path: ${{ runner.temp }}
       - name: Verify and unpack Gradle distribution
         run: |
-          echo "8cc27038d5dbd815759851ba53e70cf62e481b87494cc97cfd97982ada5ba634  $RUNNER_TEMP/gradle-7.4-bin.zip" | sha256sum --check
-          unzip -q "$RUNNER_TEMP/gradle-7.4-bin.zip" -d "$RUNNER_TEMP"
-          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-7.4/bin/gradle" >> "$GITHUB_ENV"
+          echo "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06  $RUNNER_TEMP/gradle-9.3.1-bin.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle-9.3.1-bin.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-9.3.1/bin/gradle" >> "$GITHUB_ENV"
       - name: Probe one public fixture with controlled request profiles
         env:
           VIMUSIC_LIVE_PLAYER_PROBE: "1"

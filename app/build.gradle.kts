@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
-    kotlin("android")
-    kotlin("kapt")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("com.android.legacy-kapt") version "9.1.1"
 }
 
 android {
@@ -42,13 +42,14 @@ android {
     }
 
     sourceSets.all {
-        kotlin.srcDir("src/$name/kotlin")
+        kotlin.directories.add("src/$name/kotlin")
     }
     // Historical Room schema exports are used only by instrumentation tests.
-    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -57,14 +58,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
-    }
-
-    kotlinOptions {
-        freeCompilerArgs += "-Xcontext-receivers"
-        jvmTarget = "1.8"
-    }
 }
 
 kapt {
@@ -80,6 +73,7 @@ dependencies {
 
     implementation(libs.compose.activity)
     implementation(libs.compose.foundation)
+    implementation("androidx.compose.foundation:foundation-layout:1.3.0-rc01")
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.util)
     implementation(libs.compose.ripple)
@@ -101,4 +95,11 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
 
     coreLibraryDesugaring(libs.desugaring)
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xcontext-receivers")
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    }
 }

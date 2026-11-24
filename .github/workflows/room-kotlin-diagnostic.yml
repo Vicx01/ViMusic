@@ -1,11 +1,6 @@
-name: Room Kotlin isolated diagnostics
+name: Historical Room Kotlin diagnostics (a1003f5)
 
 on:
-  push:
-    paths:
-      - '.github/workflows/room-kotlin-diagnostic.yml'
-      - '.github/scripts/room-kotlin-experiment.py'
-      - 'app/src/androidTest/kotlin/it/vfsfitvnm/vimusic/DatabasePersistenceTest.kt'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +17,8 @@ jobs:
         case: [baseline, kotlin19, room252, room261sdk34, static, static18, metadata062]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: a1003f5daa03da8dde675b398d59a3efbb5b2501
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

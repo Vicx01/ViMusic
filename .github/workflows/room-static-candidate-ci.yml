@@ -1,13 +1,6 @@
-name: Room static candidate isolated CI
+name: Historical Room static candidate (a1003f5)
 
 on:
-  push:
-    paths:
-      - '.github/workflows/room-static-candidate-ci.yml'
-      - '.github/scripts/apply-room-static-candidate.py'
-      - 'app/src/androidTest/kotlin/it/vfsfitvnm/vimusic/DatabasePersistenceTest.kt'
-      - 'app/src/androidTest/kotlin/it/vfsfitvnm/vimusic/DatabaseMigrationTest.kt'
-      - 'app/build.gradle.kts'
   workflow_dispatch:
 
 jobs:
@@ -19,6 +12,8 @@ jobs:
         kotlin: [baseline, kotlin19]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: a1003f5daa03da8dde675b398d59a3efbb5b2501
       - name: Create and configure disposable candidate copy
         shell: bash
         env:
@@ -126,6 +121,8 @@ jobs:
         kotlin: [baseline, kotlin19]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: a1003f5daa03da8dde675b398d59a3efbb5b2501
       - name: Create and configure disposable candidate copy
         shell: bash
         env:
