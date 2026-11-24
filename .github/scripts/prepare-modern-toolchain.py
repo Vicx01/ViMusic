@@ -23,12 +23,15 @@ replace('build.gradle.kts', 'delete(rootProject.buildDir)', 'delete(rootProject.
 replace('build.gradle.kts', '        kotlinOptions {', '        compilerOptions {')
 replace('build.gradle.kts', '                    freeCompilerArgs = freeCompilerArgs + listOf(', '                    freeCompilerArgs.addAll(listOf(')
 replace('build.gradle.kts', '${project.buildDir.absolutePath}/compose_metrics"\n                    )', '${project.layout.buildDirectory.get().asFile.absolutePath}/compose_metrics"\n                    ))')
-# AGP 9 supports this temporary compatibility bridge; no source or feature is removed.
-with (root / 'gradle.properties').open('a') as stream:
-    stream.write('\nandroid.builtInKotlin=false\nandroid.newDsl=false\n')
+# AGP 9 supplies Kotlin for Android modules; retain KAPT via the legacy bridge.
+replace('app/build.gradle.kts', '    kotlin("kapt")', '    id("com.android.legacy-kapt")')
 for module in ('app', 'compose-persist', 'compose-reordering', 'compose-routing'):
     path = f'{module}/build.gradle.kts'
-    replace(path, '    kotlin("android")', '    kotlin("android")\n    id("org.jetbrains.kotlin.plugin.compose")')
+    replace(path, '    kotlin("android")', '    id("org.jetbrains.kotlin.plugin.compose")')
+    replace(path, 'kotlin.srcDir("src/$name/kotlin")', 'kotlin.directories.add("src/$name/kotlin")')
+    if module != 'app':
+        # Library target SDK is not part of the AGP 9 library DSL; app target is unchanged.
+        replace(path, '        targetSdk = 33\n', '')
     replace(path, '    composeOptions {\n        kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()\n    }\n\n', '')
     target = root / path
     data = target.read_text()
