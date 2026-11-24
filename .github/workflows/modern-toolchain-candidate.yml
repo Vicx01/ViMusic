@@ -33,6 +33,7 @@ jobs:
       - name: Build production app and run existing JVM tests
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           cd "$RUNNER_TEMP/vimusic-modern-candidate"
           gradle --no-daemon --console=plain :app:assembleDebug :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest > "$RUNNER_TEMP/modern-candidate.log" 2>&1
