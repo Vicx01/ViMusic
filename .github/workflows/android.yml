@@ -45,7 +45,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Run JVM tests and compile instrumentation APK
-        run: .github/scripts/gradle-ci.sh :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
+        run: .github/scripts/gradle-ci.sh :ktor-client-brotli:test :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
       - name: Capture production dependency baseline
         run: python3 .github/scripts/production-dependency-baseline.py
       - name: Upload production dependency baseline
@@ -68,6 +68,17 @@ jobs:
           if missing or failed:
               raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
           PY
+      - name: Verify Brotli response regression test
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('ktor-client-brotli/build/test-results/test').glob('TEST-*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          selected = [case for case in cases if case.get('name') == 'brotliResponseIsDecodedAndAdvertised']
+          if len(selected) != 1 or any(selected[0].find(tag) is not None for tag in ('failure', 'error', 'skipped')):
+              raise SystemExit('Brotli response regression did not execute successfully')
+          print('::notice title=Brotli regression::Offline compressed response fixture passed.')
+          PYTEST
       - name: Verify lyrics serialization regression test
         run: |
           python3 - <<'PY'
