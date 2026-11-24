@@ -85,3 +85,90 @@ jobs:
           print('::notice title=Modern toolchain candidate::' + output)
           PY
           exit "$result"
+      - name: Upload candidate debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-candidate-debug-apk
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  instrumentation:
+    runs-on: ubuntu-24.04
+    needs: build
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 29]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Create disposable copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vimusic-modern-candidate"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/vimusic-modern-candidate"
+          python3 .github/scripts/prepare-modern-toolchain.py
+      - name: Download candidate APK
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-candidate-debug-apk
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/apk/debug
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run API ${{ matrix.api }} instrumentation
+        shell: bash
+        env:
+          VIMUSIC_EMULATOR_API: ${{ matrix.api }}
+        working-directory: ${{ runner.temp }}/vimusic-modern-candidate
+        run: |
+          set -euo pipefail
+          export VIMUSIC_GRADLE_JAVA_HOME="$JAVA_HOME"
+          export GRADLE_EXECUTABLE="$(command -v gradle)"
+          .github/scripts/run-emulator-tests.sh
+      - name: Verify required database and playback tests
+        working-directory: ${{ runner.temp }}/vimusic-modern-candidate
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('app/build/outputs/androidTest-results/connected').rglob('TEST-*.xml'))
+          cases = [case for report in reports for case in ET.parse(report).getroot().iter('testcase')]
+          required = {
+              'resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit',
+              'errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls',
+              'resolverHttpErrorIsSanitizedAndNotRetried',
+              'loaderWrapsNonIoAndForwardsResolverIo',
+              'httpRangesAndResponseHeadersFollowTheRequestedDataSpec',
+              'continuousPlaybackPassesFirst512KiBAndThirtySeconds',
+              'queuedMediaItemPersistsThroughExistingConvertersAfterReopen',
+              'mediaItemConvertersHandleNullAndRoundTrip',
+              'everyHistoricalAdjacentMigrationPreservesFixtures',
+              'everyHistoricalSchemaMigratesToCurrentWithFixtures',
+              'roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs',
+              'unreadableQueueCannotBeOverwritten',
+              'queueReplacementRollsBackOnInsertFailure',
+              'enablingPersistenceOnlyPermitsEmptyOrRestoredQueue',
+          }
+          executed = {case.get('name') for case in cases if case.find('skipped') is None}
+          failed = [case.get('name') for case in cases if case.find('failure') is not None or case.find('error') is not None]
+          if required - executed or failed:
+              raise SystemExit(f'Missing: {sorted(required - executed)}; failed: {failed}')
+          print(f'::notice title=Modern candidate instrumentation::Executed {len(executed)} tests; no failures or missing cases.')
+          PY
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-candidate-test-results-api${{ matrix.api }}
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
