@@ -50,8 +50,18 @@ jobs:
           set +e
           set -uo pipefail
           cd "$RUNNER_TEMP/vimusic-modern-candidate"
-          gradle --no-daemon --console=plain :app:assembleDebug :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest > "$RUNNER_TEMP/modern-candidate.log" 2>&1
-          result=$?
+          # Maven can throttle hosted runners. Retry only this explicit infrastructure
+          # failure, never compiler or test errors, and keep attempts bounded.
+          result=1
+          for attempt in 1 2 3; do
+            gradle --no-daemon --console=plain :app:assembleDebug :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest > "$RUNNER_TEMP/modern-candidate.log" 2>&1
+            result=$?
+            if [ "$result" -eq 0 ] || ! grep -q '429.*Too Many Requests' "$RUNNER_TEMP/modern-candidate.log"; then break; fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Maven HTTP 429; retrying hosted candidate build (attempt $attempt of 3)."
+              sleep $((attempt * 30))
+            fi
+          done
           python3 - "$RUNNER_TEMP/modern-candidate.log" "$result" <<'PY'
           import pathlib, re, sys
           lines = pathlib.Path(sys.argv[1]).read_text(errors='replace').splitlines()
