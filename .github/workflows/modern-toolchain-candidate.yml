@@ -30,6 +30,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/vimusic-modern-candidate"
           tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/vimusic-modern-candidate"
           python3 .github/scripts/prepare-modern-toolchain.py
+      - name: Inspect Compose compile dependency selection
+        shell: bash
+        run: |
+          set +e
+          cd "$RUNNER_TEMP/vimusic-modern-candidate"
+          gradle --no-daemon --console=plain :app:dependencyInsight --dependency foundation-layout --configuration debugCompileClasspath > "$RUNNER_TEMP/modern-compose-insight.log" 2>&1
+          python3 - "$RUNNER_TEMP/modern-compose-insight.log" <<'PY'
+          import pathlib, re, sys
+          lines = pathlib.Path(sys.argv[1]).read_text(errors='replace').splitlines()
+          safe = [re.sub(r'https?://\S+', '[redacted-url]', line) for line in lines if not re.search(r'authorization|cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.I)]
+          start = next((i for i, line in enumerate(safe) if line.startswith('androidx.compose.foundation:foundation-layout')), 0)
+          output = '\n'.join(safe[start:start + 60])[:8000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=Compose compile dependency insight::' + output)
+          PY
       - name: Build production app and run existing JVM tests
         shell: bash
         run: |

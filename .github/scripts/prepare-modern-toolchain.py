@@ -26,6 +26,7 @@ replace('build.gradle.kts', '                    freeCompilerArgs = freeCompiler
 replace('build.gradle.kts', '${project.buildDir.absolutePath}/compose_metrics"\n                    )', '${project.layout.buildDirectory.get().asFile.absolutePath}/compose_metrics"\n                    ))')
 # AGP 9 supplies Kotlin for Android modules; retain KAPT via the legacy bridge.
 replace('app/build.gradle.kts', '    kotlin("kapt")', '    id("com.android.legacy-kapt") version "9.1.1"')
+replace('app/build.gradle.kts', '        compose = true', '        compose = true\n        buildConfig = true')
 for module in ('app', 'compose-persist', 'compose-reordering', 'compose-routing'):
     path = f'{module}/build.gradle.kts'
     replace(path, '    kotlin("android")', '    id("org.jetbrains.kotlin.plugin.compose")')
