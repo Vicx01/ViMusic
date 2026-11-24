@@ -16,6 +16,7 @@ def replace(path, old, new):
         raise SystemExit(f'Unexpected source in {path}: {old!r}')
     target.write_text(text.replace(old, new))
 
+replace('settings.gradle.kts', 'enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")', 'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\n\nenableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")')
 replace('settings.gradle.kts', 'version("kotlin", "1.9.25")', 'version("kotlin", "2.3.10")')
 replace('build.gradle.kts', 'classpath("com.android.tools.build", "gradle", "7.3.0")', 'classpath("com.android.tools.build", "gradle", "9.1.1")')
 replace('build.gradle.kts', 'classpath(kotlin("gradle-plugin", libs.versions.kotlin.get()))', 'classpath(kotlin("gradle-plugin", libs.versions.kotlin.get()))\n        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:${libs.versions.kotlin.get()}")')
@@ -24,7 +25,7 @@ replace('build.gradle.kts', '        kotlinOptions {', '        compilerOptions 
 replace('build.gradle.kts', '                    freeCompilerArgs = freeCompilerArgs + listOf(', '                    freeCompilerArgs.addAll(listOf(')
 replace('build.gradle.kts', '${project.buildDir.absolutePath}/compose_metrics"\n                    )', '${project.layout.buildDirectory.get().asFile.absolutePath}/compose_metrics"\n                    ))')
 # AGP 9 supplies Kotlin for Android modules; retain KAPT via the legacy bridge.
-replace('app/build.gradle.kts', '    kotlin("kapt")', '    id("com.android.legacy-kapt")')
+replace('app/build.gradle.kts', '    kotlin("kapt")', '    id("com.android.legacy-kapt") version "9.1.1"')
 for module in ('app', 'compose-persist', 'compose-reordering', 'compose-routing'):
     path = f'{module}/build.gradle.kts'
     replace(path, '    kotlin("android")', '    id("org.jetbrains.kotlin.plugin.compose")')
