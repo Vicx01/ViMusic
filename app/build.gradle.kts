@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    compileSdk = 33
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "it.vfsfitvnm.vimusic"

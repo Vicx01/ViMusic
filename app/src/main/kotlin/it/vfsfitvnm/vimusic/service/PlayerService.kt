@@ -647,7 +647,16 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         }
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String) {
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String?) {
+        // Android may send a null key when all preferences are cleared.
+        if (key == null) {
+            listOf(
+                persistentQueueKey, volumeNormalizationKey, resumePlaybackWhenDeviceConnectedKey,
+                isInvincibilityEnabledKey, skipSilenceKey, isShowingThumbnailInLockscreenKey,
+                trackLoopEnabledKey,
+            ).forEach { onSharedPreferenceChanged(sharedPreferences, it) }
+            return
+        }
         when (key) {
             persistentQueueKey -> {
                 val wasEnabled = isPersistentQueueEnabled
