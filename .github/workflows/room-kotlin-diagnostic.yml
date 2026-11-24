@@ -17,8 +17,9 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
-        case: [baseline, kotlin19, room252, room261, room261sdk34, static, static18, metadata062]
+        case: [baseline, kotlin19, room252, room261sdk34, static, static18, metadata062]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -55,6 +55,12 @@ errors = [line.strip() for line in lines if 'error:' in line or 'What went wrong
 errors = [re.sub(r'https?://\S+', '[redacted-url]', line) for line in errors if 'Converters' in line or line in ('* What went wrong:', 'BUILD FAILED', 'BUILD SUCCESSFUL')]
 summary = [f'case={case}', f'gradle_exit={run.returncode}', *errors[-12:]]
 if run.returncode:
+    for line in lines:
+        if re.match(r'^\s*(?:e:|error:)', line, re.IGNORECASE):
+            if re.search(r'authorization|cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.IGNORECASE):
+                summary.append('compiler: [redacted sensitive line]')
+            else:
+                summary.append('compiler: ' + re.sub(r'https?://\S+', '[redacted-url]', line.strip())[:500])
     start = next((i for i, line in enumerate(lines) if line.strip() == '* What went wrong:'), None)
     if start is not None:
         for line in lines[start + 1:start + 8]:
@@ -69,6 +75,13 @@ graph = subprocess.run([exe, '--no-daemon', '--console=plain', ':app:dependencie
 safe_graph = re.sub(r'https?://\S+', '[redacted-url]', graph.stdout, flags=re.IGNORECASE)
 safe_graph = '\n'.join('[redacted sensitive line]' if re.search(r'authorization|cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.IGNORECASE) else line for line in safe_graph.splitlines())
 (report / f'{case}-kapt-graph.txt').write_text(safe_graph + '\n')
+if case in ('baseline', 'static18', 'room261sdk34') and graph.returncode == 0:
+    graph_lines = safe_graph.splitlines()
+    start = next((i for i, line in enumerate(graph_lines) if line.strip() == 'kapt'), None)
+    if start is not None:
+        end = next((i for i in range(start + 1, len(graph_lines)) if graph_lines[i].strip() == ''), len(graph_lines))
+        graph_notice = '\n'.join(graph_lines[start:end])[:30000]
+        print('::notice title=Full KAPT dependency graph ' + case + '::' + graph_notice.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
 summary.append(f'kapt_graph_exit={graph.returncode}')
 for line in graph.stdout.splitlines():
     if ('androidx.room:room-compiler:' in line or 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:' in line) and len(line) < 350:

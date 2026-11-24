@@ -145,7 +145,7 @@ jobs:
                       if failure is None:
                           failure = case.find("error")
                       if failure is not None:
-                          text = failure.get("message", "")[:8000]
+                          text = (failure.get("message") or failure.text or "")[:8000]
                           text = re.sub(r'https?://\S+', '[redacted-url]', text)
                           text = '\n'.join('[redacted sensitive line]' if re.search(r'cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.I) else line for line in text.splitlines())
                           print("::error title=Historical database migration test::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
