@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [baseline, kotlin19, room252, room261, static, metadata062]
+        case: [baseline, kotlin19, room252, room261, room261sdk34, static, static18, metadata062]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -45,3 +45,37 @@ jobs:
           name: room-diagnostic-${{ matrix.case }}
           path: ${{ runner.temp }}/room-interop-report/
           if-no-files-found: warn
+
+  compare-generated:
+    needs: compile-cases
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: room-diagnostic-*
+          path: generated-comparison
+          merge-multiple: true
+      - name: Compare generated converter dispatch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import difflib
+          root = Path('generated-comparison')
+          a = (root / 'baseline-Database_Impl.java').read_text()
+          b = (root / 'static18-Database_Impl.java').read_text()
+          c = (root / 'static-Database_Impl.java').read_text()
+          for name, value, dispatch in [('baseline', a, 'Converters.INSTANCE.'), ('static18', b, 'Converters.'), ('static19', c, 'Converters.')]:
+              if dispatch not in value:
+                  raise SystemExit(f'{name}: expected converter dispatch missing')
+          normalize = lambda x: x.replace('Converters.INSTANCE.', 'Converters.')
+          diff = list(difflib.unified_diff(normalize(a).splitlines(), normalize(b).splitlines(), fromfile='baseline-normalized', tofile='static18'))
+          report = 'Kotlin 1.8: generated Database_Impl files ' + ('match exactly after normalizing converter call dispatch.' if not diff else f'have {len(diff)} diff lines after normalizing converter call dispatch.')
+          print('::notice title=Generated database implementation comparison::' + report)
+          (root / 'generated-comparison.txt').write_text(report + '\n' + '\n'.join(diff) + '\n')
+          PY
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-generated-comparison
+          path: generated-comparison/generated-comparison.txt

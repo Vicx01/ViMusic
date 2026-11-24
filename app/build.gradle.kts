@@ -44,6 +44,8 @@ android {
     sourceSets.all {
         kotlin.srcDir("src/$name/kotlin")
     }
+    // Historical Room schema exports are used only by instrumentation tests.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
     buildFeatures {
         compose = true
@@ -96,6 +98,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
 
     coreLibraryDesugaring(libs.desugaring)
 }
