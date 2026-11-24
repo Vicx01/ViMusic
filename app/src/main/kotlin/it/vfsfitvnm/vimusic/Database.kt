@@ -53,12 +53,26 @@ import it.vfsfitvnm.vimusic.models.SongAlbumMap
 import it.vfsfitvnm.vimusic.models.SongArtistMap
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
 import it.vfsfitvnm.vimusic.models.SortedSongPlaylistMap
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
 import kotlin.jvm.Throws
 import kotlinx.coroutines.flow.Flow
 
+/** Resolve the Room DAO only when a DAO method is actually called.
+ * Room can load the DAO interface while the database singleton is still building.
+ */
+internal fun deferredDatabase(resolve: () -> Database): Database =
+    Proxy.newProxyInstance(Database::class.java.classLoader, arrayOf(Database::class.java)) { _, method, args ->
+        try {
+            method.invoke(resolve(), *(args ?: emptyArray()))
+        } catch (failure: InvocationTargetException) {
+            throw failure.targetException
+        }
+    } as Database
+
 @Dao
 interface Database {
-    companion object : Database by DatabaseInitializer.Instance.database
+    companion object : Database by deferredDatabase({ DatabaseInitializer.Instance.database })
 
     @Transaction
     @Query("SELECT * FROM Song WHERE totalPlayTimeMs > 0 ORDER BY ROWID ASC")

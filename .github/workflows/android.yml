@@ -175,6 +175,7 @@ jobs:
               "continuousPlaybackPassesFirst512KiBAndThirtySeconds",
               "queuedMediaItemPersistsThroughExistingConvertersAfterReopen",
               "mediaItemConvertersHandleNullAndRoundTrip",
+              "deferredDaoResolvesOnlyOnUseAndKeepsDaoBehavior",
               "everyHistoricalAdjacentMigrationPreservesFixtures",
               "everyHistoricalSchemaMigratesToCurrentWithFixtures",
               "roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs",

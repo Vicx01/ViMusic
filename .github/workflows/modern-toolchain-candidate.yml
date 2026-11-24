@@ -8,6 +8,8 @@ on:
       - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/items/ItemContainer.kt'
       - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/items/PlaylistItem.kt'
       - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/screens/player/Player.kt'
+      - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
+      - 'app/src/androidTest/kotlin/it/vfsfitvnm/vimusic/DatabasePersistenceTest.kt'
   workflow_dispatch:
 
 permissions:
@@ -154,6 +156,7 @@ jobs:
               'continuousPlaybackPassesFirst512KiBAndThirtySeconds',
               'queuedMediaItemPersistsThroughExistingConvertersAfterReopen',
               'mediaItemConvertersHandleNullAndRoundTrip',
+              'deferredDaoResolvesOnlyOnUseAndKeepsDaoBehavior',
               'everyHistoricalAdjacentMigrationPreservesFixtures',
               'everyHistoricalSchemaMigratesToCurrentWithFixtures',
               'roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs',
