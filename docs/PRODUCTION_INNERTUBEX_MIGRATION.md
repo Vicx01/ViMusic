@@ -62,3 +62,9 @@ For BotGuard/PoToken, separately audit Vivi's HTML, JavaScript, WebView bridge, 
 5. Handle Vivi-based TTML and lyric providers as a separate task, preserving line-level and word-level timing and existing user lyrics.
 
 Each committed stage can be reverted on the same branch without rewriting history. Existing private recovery snapshots remain outside Git. A rollback to pre-API-26 builds also restores support for API 21–25; it does not require a database migration.
+
+## Production Room remediation and next compiler checkpoint
+
+The previously described 1.8.22 recovery state predates the production Room change in commit `81f5fd5`. Its [Android CI run](https://github.com/Vicx01/ViMusic/actions/runs/45361565095) built and ran eleven instrumentation tests on each of API 26 and 29, including all historical migration fixtures and the production migration registration. The Room remediation and remaining unsupported Parcel limitation are detailed in [the migration review](ROOM_MIGRATION_REVIEW.md). Before this compiler change, commit `81f5fd5` was archived locally as `room-before-kotlin19-81f5fd5.tar.gz` (SHA-256 `73359d40ffde198f64269a2e3653b206d7c65c042242d65da72df598e1506e01`).
+
+The current checkpoint changes Kotlin Gradle and serialization plugins **1.8.22 → 1.9.25** and the compatible Compose compiler **1.4.8 → 1.5.15**; Room, Gradle, AGP, Ktor, Media3, SDK versions and provider code are unchanged. The isolated Kotlin 1.9 candidate built with the production fix; production CI must pass before claiming this checkpoint is validated. This intermediate toolchain still cannot be assumed compatible with the InnerTubeX artifact's Kotlin 2.x metadata and Ktor 3 APIs.

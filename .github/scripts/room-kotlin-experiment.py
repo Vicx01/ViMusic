@@ -12,12 +12,12 @@ report = Path(os.environ['RUNNER_TEMP']) / 'room-interop-report'
 report.mkdir(parents=True, exist_ok=True)
 settings = project / 'settings.gradle.kts'
 text = settings.read_text()
-assert text.count('version("kotlin", "1.8.22")') == 1
-assert text.count('version("compose-compiler", "1.4.8")') == 1
+assert text.count('version("kotlin", "1.9.25")') == 1
+assert text.count('version("compose-compiler", "1.5.15")') == 1
 assert text.count('version("room", "2.5.0-beta01")') == 1
-if case not in ('baseline', 'static18'):
-    text = text.replace('version("kotlin", "1.8.22")', 'version("kotlin", "1.9.25")')
-    text = text.replace('version("compose-compiler", "1.4.8")', 'version("compose-compiler", "1.5.15")')
+if case in ('baseline', 'static18'):
+    text = text.replace('version("kotlin", "1.9.25")', 'version("kotlin", "1.8.22")')
+    text = text.replace('version("compose-compiler", "1.5.15")', 'version("compose-compiler", "1.4.8")')
 if case == 'room252':
     text = text.replace('version("room", "2.5.0-beta01")', 'version("room", "2.5.2")')
 elif case in ('room261', 'room261sdk34'):

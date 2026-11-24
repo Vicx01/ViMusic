@@ -14,11 +14,11 @@ variant = os.environ.get('ROOM_CANDIDATE_KOTLIN', 'kotlin19')
 if variant not in ('baseline', 'kotlin19'):
     raise SystemExit('Unknown candidate compiler variant')
 for old, new in (
-    ('version("kotlin", "1.8.22")', 'version("kotlin", "1.9.25")'),
-    ('version("compose-compiler", "1.4.8")', 'version("compose-compiler", "1.5.15")'),
+    ('version("kotlin", "1.9.25")', 'version("kotlin", "1.8.22")'),
+    ('version("compose-compiler", "1.5.15")', 'version("compose-compiler", "1.4.8")'),
 ):
     assert text.count(old) == 1
-    if variant == 'kotlin19':
+    if variant == 'baseline':
         text = text.replace(old, new)
 settings.write_text(text)
 source = root / 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
