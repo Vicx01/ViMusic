@@ -29,7 +29,9 @@ replace('app/build.gradle.kts', '    kotlin("kapt")', '    id("com.android.legac
 replace('app/build.gradle.kts', '        compose = true', '        compose = true\n        buildConfig = true')
 # AGP 9 selected foundation-layout 1.0.0 transitively; retain the app's
 # declared Compose generation so WindowInsets and related APIs remain available.
-replace('app/build.gradle.kts', '    implementation(libs.compose.foundation)', '    implementation(libs.compose.foundation)\n    implementation("androidx.compose.foundation:foundation-layout:${libs.versions.compose.get()}")')
+replace('settings.gradle.kts', 'version("compose", "1.3.0-rc01")', 'version("compose", "1.3.0-rc01")')
+replace('app/build.gradle.kts', '    implementation(libs.compose.foundation)', '    implementation(libs.compose.foundation)\n    implementation("androidx.compose.foundation:foundation-layout:1.3.0-rc01")')
+replace('app/build.gradle.kts', 'sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")', 'sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")')
 for module in ('app', 'compose-persist', 'compose-reordering', 'compose-routing'):
     path = f'{module}/build.gradle.kts'
     replace(path, '    kotlin("android")', '    id("org.jetbrains.kotlin.plugin.compose")')
