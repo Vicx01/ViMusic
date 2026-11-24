@@ -25,6 +25,8 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import android.text.format.DateUtils
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -107,7 +109,6 @@ import it.vfsfitvnm.vimusic.utils.skipSilenceKey
 import it.vfsfitvnm.vimusic.utils.timer
 import it.vfsfitvnm.vimusic.utils.trackLoopEnabledKey
 import it.vfsfitvnm.vimusic.utils.volumeNormalizationKey
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlin.system.exitProcess
 import kotlinx.coroutines.CoroutineScope
@@ -155,7 +156,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
     private var volumeNormalizationJob: Job? = null
 
     // Do not overwrite persisted rows unless their restore has fully succeeded.
-    private val restoredPersistentQueue = AtomicBoolean(false)
+    private val persistentQueueStore by lazy { PersistentQueueStore(DatabaseInitializer.Instance) }
     private var isPersistentQueueEnabled = false
     private var isShowingThumbnailInLockscreen = true
     override var isInvincibilityEnabled = false
@@ -429,13 +430,8 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             )
         }.let { queuedMediaItems ->
             query {
-                if (!restoredPersistentQueue.get()) {
+                if (!persistentQueueStore.replaceIfRestored(queuedMediaItems)) {
                     Log.e("PersistentQueue", "Queue was not restored; refusing to overwrite saved queue")
-                    return@query
-                }
-                DatabaseInitializer.Instance.runInTransaction {
-                    Database.clearQueue()
-                    Database.insert(queuedMediaItems)
                 }
             }
         }
@@ -445,11 +441,16 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         if (!isPersistentQueueEnabled) return
 
         query {
-            // Read before allowing replacement. A malformed/unsupported Parcel
-            // still raises the existing error and remains on disk, untouched.
-            val queuedSong = Database.queue()
+            // An unreadable item must not prevent the rest of the app starting,
+            // and must never be cleared or replaced on shutdown.
+            val queuedSong = try {
+                persistentQueueStore.read()
+            } catch (failure: RuntimeException) {
+                reportQueueRestoreFailure(failure)
+                return@query
+            }
             if (queuedSong.isEmpty()) {
-                restoredPersistentQueue.set(true)
+                persistentQueueStore.markRestored()
                 return@query
             }
 
@@ -474,7 +475,15 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 startForegroundService(this@PlayerService, intent<PlayerService>())
                 startForeground(NotificationId, notification())
             }
-            restoredPersistentQueue.set(true)
+            persistentQueueStore.markRestored()
+        }
+    }
+
+    private fun reportQueueRestoreFailure(failure: RuntimeException) {
+        // Do not log stored blobs or exception messages that may contain user data.
+        Log.e("PersistentQueue", "Saved queue could not be restored (${failure.javaClass.simpleName}); it was preserved")
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(this, R.string.saved_queue_restore_failed, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -640,8 +649,21 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String) {
         when (key) {
-            persistentQueueKey -> isPersistentQueueEnabled =
-                sharedPreferences.getBoolean(key, isPersistentQueueEnabled)
+            persistentQueueKey -> {
+                val wasEnabled = isPersistentQueueEnabled
+                isPersistentQueueEnabled = sharedPreferences.getBoolean(key, isPersistentQueueEnabled)
+                if (!wasEnabled && isPersistentQueueEnabled) {
+                    query {
+                        try {
+                            if (!persistentQueueStore.allowSavingIfEmpty()) {
+                                Log.w("PersistentQueue", "Existing saved queue retained; restart to restore it")
+                            }
+                        } catch (failure: RuntimeException) {
+                            reportQueueRestoreFailure(failure)
+                        }
+                    }
+                }
+            }
 
             volumeNormalizationKey -> maybeNormalizeVolume()
 

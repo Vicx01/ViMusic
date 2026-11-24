@@ -221,6 +221,9 @@ jobs:
               "everyHistoricalAdjacentMigrationPreservesFixtures",
               "everyHistoricalSchemaMigratesToCurrentWithFixtures",
               "roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs",
+              "unreadableQueueCannotBeOverwritten",
+              "queueReplacementRollsBackOnInsertFailure",
+              "enablingPersistenceOnlyPermitsEmptyOrRestoredQueue",
           }
           executed = {case.get("name") for case in cases if case.find("skipped") is None}
           failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
