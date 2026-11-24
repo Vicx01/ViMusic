@@ -1,0 +1,59 @@
+name: Modern production toolchain candidate
+
+on:
+  push:
+    paths:
+      - '.github/workflows/modern-toolchain-candidate.yml'
+      - '.github/scripts/prepare-modern-toolchain.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Create disposable copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vimusic-modern-candidate"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/vimusic-modern-candidate"
+          python3 .github/scripts/prepare-modern-toolchain.py
+      - name: Build production app and run existing JVM tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$RUNNER_TEMP/vimusic-modern-candidate"
+          gradle --no-daemon --console=plain :app:assembleDebug :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest > "$RUNNER_TEMP/modern-candidate.log" 2>&1
+          result=$?
+          python3 - "$RUNNER_TEMP/modern-candidate.log" "$result" <<'PY'
+          import pathlib, re, sys
+          lines = pathlib.Path(sys.argv[1]).read_text(errors='replace').splitlines()
+          safe = []
+          for line in lines:
+              if re.search(r'authorization|cookie|sapisid|po[-_ ]?token|api[-_ ]?key|password|secret|credential|bearer', line, re.I):
+                  continue
+              line = re.sub(r'https?://\S+', '[redacted-url]', line)
+              if re.match(r'\s*(?:e: |error: )', line, re.I) or ': error:' in line:
+                  safe.append(line)
+          start = next((i for i, line in enumerate(lines) if '* What went wrong:' in line), None)
+          if start is not None:
+              for line in lines[start:start + 35]:
+                  if not re.search(r'authorization|cookie|sapisid|po[-_ ]?token|api[-_ ]?key|password|secret|credential|bearer', line, re.I):
+                      safe.append(re.sub(r'https?://\S+', '[redacted-url]', line))
+          safe.append('gradle_exit=' + sys.argv[2])
+          output = '\n'.join(safe)[-14000:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=Modern toolchain candidate::' + output)
+          PY
+          exit "$result"
