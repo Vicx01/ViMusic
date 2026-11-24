@@ -196,6 +196,9 @@ jobs:
           for path in reports:
               cases.extend(ET.parse(path).getroot().iter("testcase"))
           required = {
+              "modernBridgePreservesRangeHeadersAndCacheExpiry",
+              "modernBridgeFallbackIsVisibleAndUnsafeStreamsAreRejected",
+              "modernBridgeRespectsAudioCacheAndCancellation",
               "resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit",
               "errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls",
               "resolverHttpErrorIsSanitizedAndNotRetried",
