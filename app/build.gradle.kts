@@ -87,8 +87,13 @@ dependencies {
     implementation(libs.room)
     kapt(libs.room.compiler)
 
+    // The legacy provider remains active until InnerTubeX playback is validated.
     implementation(projects.innertube)
     implementation(projects.kugou)
+    implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.11.6")
+
+    testImplementation(testLibs.junit)
+    testImplementation(libs.ktor.client.mock)
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test:runner:1.5.2")
