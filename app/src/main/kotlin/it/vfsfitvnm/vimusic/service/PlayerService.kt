@@ -73,6 +73,7 @@ import it.vfsfitvnm.innertube.models.bodies.PlayerBody
 import it.vfsfitvnm.innertube.requests.player
 import it.vfsfitvnm.vimusic.BuildConfig
 import it.vfsfitvnm.vimusic.Database
+import it.vfsfitvnm.vimusic.DatabaseInitializer
 import it.vfsfitvnm.vimusic.MainActivity
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.enums.ExoPlayerDiskCacheMaxSize
@@ -106,6 +107,7 @@ import it.vfsfitvnm.vimusic.utils.skipSilenceKey
 import it.vfsfitvnm.vimusic.utils.timer
 import it.vfsfitvnm.vimusic.utils.trackLoopEnabledKey
 import it.vfsfitvnm.vimusic.utils.volumeNormalizationKey
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlin.system.exitProcess
 import kotlinx.coroutines.CoroutineScope
@@ -152,6 +154,8 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     private var volumeNormalizationJob: Job? = null
 
+    // Do not overwrite persisted rows unless their restore has fully succeeded.
+    private val restoredPersistentQueue = AtomicBoolean(false)
     private var isPersistentQueueEnabled = false
     private var isShowingThumbnailInLockscreen = true
     override var isInvincibilityEnabled = false
@@ -425,8 +429,14 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             )
         }.let { queuedMediaItems ->
             query {
-                Database.clearQueue()
-                Database.insert(queuedMediaItems)
+                if (!restoredPersistentQueue.get()) {
+                    Log.e("PersistentQueue", "Queue was not restored; refusing to overwrite saved queue")
+                    return@query
+                }
+                DatabaseInitializer.Instance.runInTransaction {
+                    Database.clearQueue()
+                    Database.insert(queuedMediaItems)
+                }
             }
         }
     }
@@ -435,10 +445,13 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         if (!isPersistentQueueEnabled) return
 
         query {
+            // Read before allowing replacement. A malformed/unsupported Parcel
+            // still raises the existing error and remains on disk, untouched.
             val queuedSong = Database.queue()
-            Database.clearQueue()
-
-            if (queuedSong.isEmpty()) return@query
+            if (queuedSong.isEmpty()) {
+                restoredPersistentQueue.set(true)
+                return@query
+            }
 
             val index = queuedSong.indexOfFirst { it.position != null }.coerceAtLeast(0)
 
@@ -461,6 +474,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 startForegroundService(this@PlayerService, intent<PlayerService>())
                 startForeground(NotificationId, notification())
             }
+            restoredPersistentQueue.set(true)
         }
     }
 

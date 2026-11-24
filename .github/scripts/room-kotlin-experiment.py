@@ -35,15 +35,22 @@ if case == 'metadata062':
     data = build.read_text()
     assert data.count('    kapt(libs.room.compiler)') == 1
     build.write_text(data.replace('    kapt(libs.room.compiler)', '    kapt(libs.room.compiler)\n    kapt("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.6.2")'))
-if case in ('static', 'static18'):
-    source = project / 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
-    data = source.read_text()
-    for method in ('mediaItemFromByteArray', 'mediaItemToByteArray'):
-        old = f'    @TypeConverter\n    fun {method}('
-        new = f'    @JvmStatic\n    @TypeConverter\n    fun {method}('
-        assert data.count(old) == 1
-        data = data.replace(old, new)
-    source.write_text(data)
+source = project / 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
+data = source.read_text()
+for method in ('mediaItemFromByteArray', 'mediaItemToByteArray'):
+    old = f'    @TypeConverter\n    fun {method}('
+    new = f'    @JvmStatic\n    @TypeConverter\n    fun {method}('
+    # Reconstruct the pre-fix baseline only in the disposable diagnostic copy.
+    if case in ('static', 'static18'):
+        if data.count(new) == 0:
+            assert data.count(old) == 1
+            data = data.replace(old, new)
+        else:
+            assert data.count(new) == 1
+    else:
+        assert data.count(new) == 1
+        data = data.replace(new, old)
+source.write_text(data)
 
 exe = os.environ['GRADLE_EXECUTABLE']
 command = [exe, '--no-daemon', '--console=plain', '--stacktrace', ':app:assembleDebug', ':innertube:test', ':kugou:test', ':app:testDebugUnitTest', ':app:assembleDebugAndroidTest']

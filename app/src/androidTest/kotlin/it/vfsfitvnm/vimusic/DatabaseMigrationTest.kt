@@ -3,11 +3,13 @@ package it.vfsfitvnm.vimusic
 import android.os.Parcel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -24,12 +26,8 @@ class DatabaseMigrationTest {
     @get:Rule
     val helper = MigrationTestHelper(instrumentation, DatabaseInitializer::class.java)
 
-    private val manualMigrations = arrayOf(
-        DatabaseInitializer.From8To9Migration(),
-        DatabaseInitializer.From10To11Migration(),
-        DatabaseInitializer.From14To15Migration(),
-        DatabaseInitializer.From22To23Migration(),
-    )
+    private val manualMigrations = DatabaseInitializer.migrations()
+    private val unknownBlob = byteArrayOf(0x7f, 0x00, 0x42, 0x33)
 
     /** Independently constructs the Parcel/Bundle representation used by the old converter. */
     private fun fixtureBytes(mediaId: String, title: String?): ByteArray {
@@ -67,6 +65,8 @@ class DatabaseMigrationTest {
                 arrayOf(101L, fixtureBytes("legacy-null", null), null))
             db.execSQL("INSERT INTO QueuedMediaItem (id, mediaItem, position) VALUES (?, ?, ?)",
                 arrayOf(102L, fixtureBytes("legacy-title", "Saved title"), 4567L))
+            db.execSQL("INSERT INTO QueuedMediaItem (id, mediaItem, position) VALUES (?, ?, ?)",
+                arrayOf(103L, unknownBlob, null))
         }
     }
 
@@ -102,12 +102,18 @@ class DatabaseMigrationTest {
             }
         }
         if (from == 2 || from == 3 || from >= 6) {
-            // Version 3 -> 4 declares a queue table deletion. Assert preservation
-            // anyway: a reported failure is safer than accepting lost user data.
-            db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='QueuedMediaItem'").use { cursor ->
+            // In schema 4/5 the queue is stored verbatim in a temporary side
+            // table, restored to the declared queue table at schema 6.
+            val queueTable = if (to == 4 || to == 5) "_vimusic_queue_migration_backup" else "QueuedMediaItem"
+            db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='$queueTable'").use { cursor ->
                 assertTrue("queue table was removed", cursor.moveToFirst())
             }
-            db.query("SELECT mediaItem, position FROM QueuedMediaItem WHERE id = 101").use { cursor ->
+            db.query("SELECT mediaItem, position FROM $queueTable WHERE id = 103").use { cursor ->
+                assertTrue("unknown queue blob was lost", cursor.moveToFirst())
+                assertArrayEquals(unknownBlob, cursor.getBlob(0))
+                assertTrue(cursor.isNull(1))
+            }
+            db.query("SELECT mediaItem, position FROM $queueTable WHERE id = 101").use { cursor ->
                 assertTrue("nullable queue item was lost", cursor.moveToFirst())
                 assertTrue("nullable queue position changed", cursor.isNull(1))
                 val decoded = Converters.mediaItemFromByteArray(cursor.getBlob(0))
@@ -115,7 +121,7 @@ class DatabaseMigrationTest {
                 assertEquals("legacy-null", decoded?.mediaId)
                 assertNull(decoded?.mediaMetadata?.title)
             }
-            db.query("SELECT mediaItem, position FROM QueuedMediaItem WHERE id = 102").use { cursor ->
+            db.query("SELECT mediaItem, position FROM $queueTable WHERE id = 102").use { cursor ->
                 assertTrue("queue item was lost", cursor.moveToFirst())
                 assertEquals(4567L, cursor.getLong(1))
                 val decoded = Converters.mediaItemFromByteArray(cursor.getBlob(0))
@@ -133,7 +139,7 @@ class DatabaseMigrationTest {
             val name = "room-migration-test-${UUID.randomUUID()}.db"
             try {
                 helper.createDatabase(name, from).use { seed(it, from) }
-                helper.runMigrationsAndValidate(name, to, true, *manualMigrations).use { verify(it, from, to) }
+                helper.runMigrationsAndValidate(name, to, to != 4, *manualMigrations).use { verify(it, from, to) }
             } catch (failure: AssertionError) {
                 failures.add("$from->$to: ${failure.message}")
             } catch (failure: Exception) {
@@ -143,6 +149,40 @@ class DatabaseMigrationTest {
             }
         }
         assertTrue("Historical migration failures:\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    @Test
+    fun roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs() {
+        for (from in 2..3) {
+            val name = "room-production-path-${UUID.randomUUID()}.db"
+            try {
+                helper.createDatabase(name, from).use { seed(it, from) }
+                val db = Room.databaseBuilder(instrumentation.targetContext, DatabaseInitializer::class.java, name)
+                    .addMigrations(*DatabaseInitializer.migrations())
+                    .allowMainThreadQueries()
+                    .build()
+                try {
+                    verify(db.openHelper.writableDatabase, from, 23)
+                    // The invalid blob cannot be decoded by the current converter.
+                    // A failed read must not mutate or discard any persisted rows.
+                    var readFailed = false
+                    try {
+                        db.database.queue()
+                    } catch (expected: RuntimeException) {
+                        readFailed = true
+                    }
+                    assertTrue("unknown blob unexpectedly decoded", readFailed)
+                    verify(db.openHelper.writableDatabase, from, 23)
+                    db.openHelper.writableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='_vimusic_queue_migration_backup'").use { cursor ->
+                        assertTrue("backup table should be removed after restoration", !cursor.moveToFirst())
+                    }
+                } finally {
+                    db.close()
+                }
+            } finally {
+                instrumentation.targetContext.deleteDatabase(name)
+            }
+        }
     }
 
     @Test

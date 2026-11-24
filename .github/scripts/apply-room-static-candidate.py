@@ -25,7 +25,11 @@ source = root / 'app/src/main/kotlin/it/vfsfitvnm/vimusic/Database.kt'
 text = source.read_text()
 for method in ('mediaItemFromByteArray', 'mediaItemToByteArray'):
     old = f'    @TypeConverter\n    fun {method}('
-    assert text.count(old) == 1
-    text = text.replace(old, f'    @JvmStatic\n    @TypeConverter\n    fun {method}(')
+    new = f'    @JvmStatic\n    @TypeConverter\n    fun {method}('
+    if text.count(new) == 0:
+        assert text.count(old) == 1
+        text = text.replace(old, new)
+    else:
+        assert text.count(new) == 1
 source.write_text(text)
 print(f'Applied static converter annotations in disposable copy; compiler variant: {variant}.')
