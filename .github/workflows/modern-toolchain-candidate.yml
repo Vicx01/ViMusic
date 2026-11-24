@@ -139,7 +139,7 @@ jobs:
           set -euo pipefail
           export VIMUSIC_GRADLE_JAVA_HOME="$JAVA_HOME"
           export GRADLE_EXECUTABLE="$(command -v gradle)"
-          .github/scripts/run-emulator-tests.sh
+          timeout 1200 .github/scripts/run-emulator-tests.sh
       - name: Verify required database and playback tests
         working-directory: ${{ runner.temp }}/vimusic-modern-candidate
         run: |

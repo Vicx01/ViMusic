@@ -6,7 +6,8 @@ export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
 api="${VIMUSIC_EMULATOR_API:-29}"
 case "$api" in 26|29) ;; *) echo "Unsupported emulator API: $api" >&2; exit 1 ;; esac
 image="system-images;android-${api};google_apis;x86_64"
-sdkmanager --install "$image" >"${RUNNER_TEMP}/vimusic-sdk.log" 2>&1 || { tail -n 40 "${RUNNER_TEMP}/vimusic-sdk.log"; exit 1; }
+# A stalled SDK download should fail visibly instead of consuming the whole CI job.
+timeout 600 sdkmanager --install "$image" >"${RUNNER_TEMP}/vimusic-sdk.log" 2>&1 || { tail -n 40 "${RUNNER_TEMP}/vimusic-sdk.log"; exit 1; }
 echo "Installed emulator system image for API $api."
 ls -l /dev/kvm || true
 emulator -accel-check || true
