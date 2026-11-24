@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/modern-toolchain-candidate.yml'
       - '.github/scripts/prepare-modern-toolchain.py'
+      - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/items/ItemContainer.kt'
+      - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/items/PlaylistItem.kt'
+      - 'app/src/main/kotlin/it/vfsfitvnm/vimusic/ui/screens/player/Player.kt'
   workflow_dispatch:
 
 permissions:

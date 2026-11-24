@@ -204,7 +204,7 @@ fun PlaylistItem(
                 .requiredSize(thumbnailSizeDp)
         ) {
             thumbnailContent(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
             )
 
