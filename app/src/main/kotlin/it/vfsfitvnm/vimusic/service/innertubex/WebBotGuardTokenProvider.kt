@@ -9,9 +9,19 @@ import com.metrolist.innertubex.extraction.strategy.PoTokenProviderKind
 import it.vfsfitvnm.vimusic.service.innertubex.potoken.PoTokenGenerator
 import kotlinx.coroutines.CancellationException
 
+internal interface BotGuardMinter {
+    suspend fun mint(videoId: String, visitorData: String): it.vfsfitvnm.vimusic.service.innertubex.potoken.PoTokenResult?
+    suspend fun close()
+}
+
 /** Anonymous visitor tokens only; ViMusic does not forward account cookies to WebView. */
-internal class WebBotGuardTokenProvider(context: Context) : TokenProvider {
-    private val generator = PoTokenGenerator(context.applicationContext)
+internal class WebBotGuardTokenProvider(private val generator: BotGuardMinter) : TokenProvider {
+    constructor(context: Context) : this(object : BotGuardMinter {
+        private val impl = PoTokenGenerator(context.applicationContext)
+        override suspend fun mint(videoId: String, visitorData: String) = impl.getWebClientPoToken(videoId, visitorData)
+        override suspend fun close() = impl.close()
+    })
+
     override val capabilities = TokenProviderCapabilities(
         providers = setOf(PoTokenProviderKind.WEB_BOTGUARD), usesWebView = true
     )
@@ -19,7 +29,7 @@ internal class WebBotGuardTokenProvider(context: Context) : TokenProvider {
     override suspend fun getPoToken(videoId: String, visitorData: String, cookie: String?): PoTokenResult? {
         if (visitorData.isBlank()) return null
         return try {
-            generator.getWebClientPoToken(videoId, visitorData)?.let {
+            generator.mint(videoId, visitorData)?.let {
                 PoTokenResult(it.playerRequestPoToken, it.streamingDataPoToken, visitorData)
             }
         } catch (cancelled: CancellationException) {

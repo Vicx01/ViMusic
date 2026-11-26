@@ -26,6 +26,8 @@ jobs:
           if-no-files-found: error
       - name: Build debug APK
         run: .github/scripts/gradle-ci.sh :app:assembleDebug
+      - name: Build minified release APK
+        run: .github/scripts/gradle-ci.sh :app:assembleRelease
       - name: Verify packaged minimum Android version
         shell: bash
         run: |
@@ -196,6 +198,8 @@ jobs:
           for path in reports:
               cases.extend(ET.parse(path).getroot().iter("testcase"))
           required = {
+              "botGuardProviderMapsTokensAndReleasesMinter",
+              "botGuardFailureReachesConnectedLegacyFallbackAndCancellationEscapes",
               "connectedModernPlayerPassesThirtySecondsSeeksAndCompletes",
               "providerSelectionUsesOnlySelectedFactory",
               "tokenFailureFallsBackToLegacyWithoutHidingFailure",
