@@ -196,6 +196,11 @@ jobs:
           for path in reports:
               cases.extend(ET.parse(path).getroot().iter("testcase"))
           required = {
+              "providerSelectionUsesOnlySelectedFactory",
+              "tokenFailureFallsBackToLegacyWithoutHidingFailure",
+              "stream403And416RefreshAndPreserveSeekRange",
+              "rejectedInitialStreamCanFallBackButChangedFormatCannotBeMixed",
+              "cancellationDoesNotFallBackOrRetry",
               "modernBridgePreservesRangeHeadersAndCacheExpiry",
               "modernBridgeFallbackIsVisibleAndUnsafeStreamsAreRejected",
               "modernBridgeRespectsAudioCacheAndCancellation",

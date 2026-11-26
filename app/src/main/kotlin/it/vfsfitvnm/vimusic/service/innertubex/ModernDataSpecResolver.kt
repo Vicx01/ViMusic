@@ -6,8 +6,8 @@ import androidx.media3.datasource.ResolvingDataSource
 import kotlinx.coroutines.CancellationException
 
 /**
- * Bridge for progressive streams only. This is not selected by PlayerService yet:
- * rejection-triggered invalidation and the token-provider lifecycle must be wired first.
+ * Bridge for progressive streams only. The playback service can select it via the
+ * experimental provider setting. Unsupported transports fall back to the legacy resolver.
  * Neither stream credentials nor caught exception messages may be logged by callers.
  */
 internal class ModernDataSpecResolver(
@@ -51,6 +51,8 @@ internal class ModernDataSpecResolver(
         } + stream.headers
         return dataSpec.buildUpon()
             .setUri(stream.url)
+            // Never mix legacy cache bytes or different stream representations.
+            .setKey("innertubex:$id:${stream.itag}")
             .setHttpRequestHeaders(headers)
             .build()
     }

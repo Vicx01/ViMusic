@@ -37,6 +37,8 @@ internal class PlaybackAdapter(client: HttpClient, tokenProvider: TokenProvider)
         }
     }
 
+    suspend fun refreshAfterStreamRejection(): Boolean = cipher.refreshAfterStreamRejection()
+
     /** Network is used only when an explicit caller invokes this method. */
     suspend fun resolve(videoId: String): StreamSnapshot {
         val stream = requireNotNull(extractor.extract(

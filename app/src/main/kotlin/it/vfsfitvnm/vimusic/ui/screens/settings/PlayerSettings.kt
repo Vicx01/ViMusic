@@ -24,6 +24,7 @@ import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
 import it.vfsfitvnm.vimusic.ui.components.themed.Header
 import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
+import it.vfsfitvnm.vimusic.utils.experimentalInnerTubeXKey
 import it.vfsfitvnm.vimusic.utils.isAtLeastAndroid6
 import it.vfsfitvnm.vimusic.utils.persistentQueueKey
 import it.vfsfitvnm.vimusic.utils.rememberPreference
@@ -40,6 +41,7 @@ fun PlayerSettings() {
     val binder = LocalPlayerServiceBinder.current
 
     var persistentQueue by rememberPreference(persistentQueueKey, false)
+    var experimentalInnerTubeX by rememberPreference(experimentalInnerTubeXKey, false)
     var resumePlaybackWhenDeviceConnected by rememberPreference(
         resumePlaybackWhenDeviceConnectedKey,
         false
@@ -72,6 +74,13 @@ fun PlayerSettings() {
             onCheckedChange = {
                 persistentQueue = it
             }
+        )
+
+        SwitchSettingEntry(
+            title = "Experimental InnerTubeX playback",
+            text = "Try the new provider with legacy fallback. Restart the playback service to apply.",
+            isChecked = experimentalInnerTubeX,
+            onCheckedChange = { experimentalInnerTubeX = it }
         )
 
         if (isAtLeastAndroid6) {

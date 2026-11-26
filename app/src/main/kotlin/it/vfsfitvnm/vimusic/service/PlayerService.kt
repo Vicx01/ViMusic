@@ -82,11 +82,14 @@ import it.vfsfitvnm.vimusic.enums.ExoPlayerDiskCacheMaxSize
 import it.vfsfitvnm.vimusic.models.Event
 import it.vfsfitvnm.vimusic.models.QueuedMediaItem
 import it.vfsfitvnm.vimusic.query
+import it.vfsfitvnm.vimusic.service.innertubex.ModernDataSpecResolver
+import it.vfsfitvnm.vimusic.service.innertubex.ModernPlayback
 import it.vfsfitvnm.vimusic.utils.InvincibleService
 import it.vfsfitvnm.vimusic.utils.TimerJob
 import it.vfsfitvnm.vimusic.utils.YouTubeRadio
 import it.vfsfitvnm.vimusic.utils.activityPendingIntent
 import it.vfsfitvnm.vimusic.utils.broadCastPendingIntent
+import it.vfsfitvnm.vimusic.utils.experimentalInnerTubeXKey
 import it.vfsfitvnm.vimusic.utils.exoPlayerDiskCacheMaxSizeKey
 import it.vfsfitvnm.vimusic.utils.findNextMediaItemById
 import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
@@ -127,6 +130,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
     private lateinit var mediaSession: MediaSession
     private lateinit var cache: SimpleCache
     private lateinit var player: ExoPlayer
+    private var modernPlayback: ModernPlayback? = null
 
     private val stateBuilder = PlaybackState.Builder()
         .setActions(
@@ -285,6 +289,14 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         player.removeListener(this)
         player.stop()
         player.release()
+        modernPlayback?.let { modern ->
+            modernPlayback = null
+            CoroutineScope(Dispatchers.IO).launch {
+                try { modern.close() } catch (_: Exception) {
+                    Log.w("ViMusicPlayback", "Modern provider cleanup failed")
+                }
+            }
+        }
 
         unregisterReceiver(notificationActionReceiver)
 
@@ -801,9 +813,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     private fun createDataSourceFactory(): DataSource.Factory {
         val chunkLength = 512 * 1024L
-        return ResolvingDataSource.Factory(
-            createCacheDataSource(),
-            PlaybackDataSpecResolver(
+        val legacyResolver = PlaybackDataSpecResolver(
                 isCached = { videoId, position -> cache.isCached(videoId, position, chunkLength) },
                 resolveUri = { videoId ->
                     val urlResult = runBlocking(Dispatchers.IO) {
@@ -867,7 +877,39 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                     )
                 }
             )
+        return selectPlaybackFactory(
+            modernEnabled = preferences.getBoolean(experimentalInnerTubeXKey, false),
+            legacy = { ResolvingDataSource.Factory(createCacheDataSource(), legacyResolver) },
+            modern = { createModernPlaybackFactory(legacyResolver) }
         )
+    }
+
+    private fun createModernPlaybackFactory(legacyResolver: PlaybackDataSpecResolver): DataSource.Factory {
+        val modern = ModernPlayback(applicationContext).also { modernPlayback = it }
+        val resolver = ModernDataSpecResolver(
+            // Modern cache entries are keyed by video and itag, not the legacy key.
+            isCached = { _, _ -> false },
+            resolve = { videoId ->
+                val stream = runBlocking(Dispatchers.IO) { modern.resolve(videoId) }
+                Log.i("ViMusicPlayback", "InnerTubeX progressive stream resolved")
+                val mediaItem = runBlocking(Dispatchers.Main) { player.findNextMediaItemById(videoId) }
+                query {
+                    mediaItem?.let(Database::insert)
+                    Database.insert(it.vfsfitvnm.vimusic.models.Format(
+                        songId = videoId, itag = stream.itag, mimeType = stream.mimeType,
+                        bitrate = stream.bitrate, loudnessDb = stream.loudnessDb,
+                        contentLength = stream.contentLength
+                    ))
+                }
+                stream
+            },
+            fallback = legacyResolver,
+            onModernFailure = { Log.w("ViMusicPlayback", "InnerTubeX resolution failed; trying legacy provider") }
+        )
+        return recoveringPlaybackFactory(createCacheDataSource(), resolver, legacyResolver) { videoId ->
+            legacyResolver.invalidate(videoId)
+            runBlocking(Dispatchers.IO) { modern.refreshAfterRejection() }
+        }
     }
 
     private fun createMediaSourceFactory(): MediaSource.Factory {

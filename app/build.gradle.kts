@@ -91,6 +91,9 @@ dependencies {
     implementation(projects.innertube)
     implementation(projects.kugou)
     implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.11.6")
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.json)
 
     testImplementation(testLibs.junit)
     testImplementation(libs.ktor.client.mock)

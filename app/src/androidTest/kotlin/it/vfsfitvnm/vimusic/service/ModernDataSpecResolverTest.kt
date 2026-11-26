@@ -38,7 +38,7 @@ class ModernDataSpecResolverTest {
         assertEquals(requested.position, result.position)
         assertEquals(requested.uriPositionOffset, result.uriPositionOffset)
         assertEquals(requested.length, result.length)
-        assertEquals(requested.key, result.key)
+        assertEquals("innertubex:song:251", result.key)
         assertEquals(requested.flags, result.flags)
         assertEquals(mapOf("X-Stream" to "fixture", "X-Other" to "kept"), result.httpRequestHeaders)
         resolver.resolveDataSpec(requested)
