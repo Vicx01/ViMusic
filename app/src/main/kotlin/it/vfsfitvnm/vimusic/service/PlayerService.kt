@@ -893,14 +893,10 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 val stream = runBlocking(Dispatchers.IO) { modern.resolve(videoId) }
                 Log.i("ViMusicPlayback", "InnerTubeX progressive stream resolved")
                 val mediaItem = runBlocking(Dispatchers.Main) { player.findNextMediaItemById(videoId) }
-                query {
-                    mediaItem?.let(Database::insert)
-                    Database.insert(it.vfsfitvnm.vimusic.models.Format(
-                        songId = videoId, itag = stream.itag, mimeType = stream.mimeType,
-                        bitrate = stream.bitrate, loudnessDb = stream.loudnessDb,
-                        contentLength = stream.contentLength
-                    ))
-                }
+                // Format is shared with the legacy offline browser. Do not replace
+                // its metadata while the legacy representation still has cache bytes.
+                val legacyBytes = cache.getCachedBytes(videoId, 0, -1)
+                query { persistModernFormat(Database, mediaItem, stream, legacyBytes) }
                 stream
             },
             fallback = legacyResolver,

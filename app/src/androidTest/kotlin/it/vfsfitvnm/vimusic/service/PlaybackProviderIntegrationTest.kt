@@ -13,6 +13,7 @@ import it.vfsfitvnm.vimusic.service.innertubex.ModernDataSpecResolver
 import it.vfsfitvnm.vimusic.service.innertubex.StreamSnapshot
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.*
 import org.junit.Test
@@ -192,6 +193,22 @@ class PlaybackProviderIntegrationTest {
             server.close()
             directory.deleteRecursively()
         }
+    }
+
+    @Test fun modernMetadataDoesNotReplaceExistingLegacyCacheMetadata() {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(context, it.vfsfitvnm.vimusic.DatabaseInitializer::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val item = androidx.media3.common.MediaItem.Builder().setMediaId("song")
+                .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle("fixture").build()).build()
+            db.database.insert(item)
+            db.database.insert(it.vfsfitvnm.vimusic.models.Format(songId = "song", itag = 140, contentLength = 10))
+            persistModernFormat(db.database, item, stream(1), legacyBytes = 10)
+            assertEquals(140, kotlinx.coroutines.runBlocking { db.database.format("song").first() }?.itag)
+            persistModernFormat(db.database, item, stream(1), legacyBytes = 0)
+            assertEquals(251, kotlinx.coroutines.runBlocking { db.database.format("song").first() }?.itag)
+        } finally { db.close() }
     }
 
     @Test fun cancellationDoesNotFallBackOrRetry() {
