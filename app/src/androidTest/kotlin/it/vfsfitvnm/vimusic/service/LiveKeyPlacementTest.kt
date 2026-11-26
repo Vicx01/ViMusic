@@ -8,12 +8,14 @@ import com.metrolist.innertubex.InnerTubeHttpException
 import com.metrolist.innertubex.models.YouTubeClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestPipeline
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.encodedPath
 import io.ktor.serialization.kotlinx.json.json
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -29,10 +31,28 @@ class LiveKeyPlacementTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("vimusicLive") == "1")
         // The same public web-client key already used by the legacy provider. Never log it.
         val publicKey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
-        var noHttpResponse = 0
+        var incompleteObservations = 0
         for (placement in listOf("none", "header", "query")) {
+            val observed = AtomicInteger()
+            val mismatched = AtomicInteger()
             val client = HttpClient(OkHttp) {
                 expectSuccess = false
+                HttpResponseValidator {
+                    validateResponse { response ->
+                        val request = response.call.request
+                        if (request.url.host == "music.youtube.com" && request.url.encodedPath == "/youtubei/v1/player") {
+                            val headers = request.headers.getAll("X-Goog-Api-Key")
+                            val query = request.url.parameters.getAll("key")
+                            val matches = when (placement) {
+                                "header" -> headers == listOf(publicKey) && query == null
+                                "query" -> headers == null && query == listOf(publicKey)
+                                else -> headers == null && query == null
+                            }
+                            observed.incrementAndGet()
+                            if (!matches) mismatched.incrementAndGet()
+                        }
+                    }
+                }
                 install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }) }
                 install(HttpTimeout) { requestTimeoutMillis = 30_000; connectTimeoutMillis = 15_000; socketTimeoutMillis = 20_000 }
                 install("ControlledKeyPlacement") {
@@ -71,9 +91,10 @@ class LiveKeyPlacementTest {
                 tube.close()
                 client.close()
             }
-            if (http == 0) noHttpResponse++
-            Log.i("ViMusicPlayback", "LIVE_KEY placement=$placement host=music.youtube.com client=VISIONOS version=0.1 http=$http status=$status adaptive=$audio")
+            val verified = observed.get() > 0 && mismatched.get() == 0
+            if (http == 0 || !verified) incompleteObservations++
+            Log.i("ViMusicPlayback", "LIVE_KEY placement=$placement host=music.youtube.com client=VISIONOS version=0.1 http=$http status=$status adaptive=$audio verified=$verified")
         }
-        org.junit.Assert.assertEquals("At least one key-placement request had no HTTP response", 0, noHttpResponse)
+        org.junit.Assert.assertEquals("At least one request had no response or unverified key placement", 0, incompleteObservations)
     }
 }
