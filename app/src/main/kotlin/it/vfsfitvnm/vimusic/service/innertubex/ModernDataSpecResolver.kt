@@ -14,7 +14,7 @@ internal class ModernDataSpecResolver(
     private val isCached: (String, Long) -> Boolean,
     private val resolve: (String) -> StreamSnapshot,
     private val fallback: ResolvingDataSource.Resolver,
-    private val onModernFailure: () -> Unit,
+    private val onModernFailure: (Exception) -> Unit,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) : ResolvingDataSource.Resolver {
     private val cache = StreamCache(initialGeneration = 0L)
@@ -40,7 +40,7 @@ internal class ModernDataSpecResolver(
             throw error
         } catch (error: Exception) {
             cache.invalidate(id, 0L)
-            onModernFailure()
+            onModernFailure(error)
             return fallback.resolveDataSpec(dataSpec)
         }
         // DataSpec's own request headers survive, with provider-specific headers

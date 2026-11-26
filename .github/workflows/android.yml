@@ -199,6 +199,7 @@ jobs:
               cases.extend(ET.parse(path).getroot().iter("testcase"))
           required = {
               "modernMetadataDoesNotReplaceExistingLegacyCacheMetadata",
+              "modernDiagnosticsRedactUntrustedFailureFields",
               "botGuardProviderMapsTokensAndReleasesMinter",
               "botGuardFailureReachesConnectedLegacyFallbackAndCancellationEscapes",
               "connectedModernPlayerPassesThirtySecondsSeeksAndCompletes",

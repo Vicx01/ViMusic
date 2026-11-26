@@ -42,6 +42,25 @@ class BotGuardProviderIntegrationTest {
         assertEquals(2, closes)
     }
 
+    @Test fun modernDiagnosticsRedactUntrustedFailureFields() {
+        val diagnostics = com.metrolist.innertubex.extraction.StreamDiagnostics(
+            listOf(
+                com.metrolist.innertubex.extraction.StreamAttemptDiagnostic("ANDROID_VR", "hidden", "private-agent", "playability:UNTRUSTED_SECRET"),
+                com.metrolist.innertubex.extraction.StreamAttemptDiagnostic("UNTRUSTED_SECRET", null, "private-agent", "request:UNTRUSTED_SECRET")
+            ), false
+        )
+        val failure = com.metrolist.innertubex.extraction.StreamResolveException(
+            com.metrolist.innertubex.extraction.StreamResolveException.Reason.NETWORK,
+            "https://private.invalid/?token=UNTRUSTED_SECRET", diagnostics = diagnostics
+        )
+        val safe = it.vfsfitvnm.vimusic.service.innertubex.safeModernFailure(failure)
+        assertTrue(safe.contains("ANDROID_VR:not-playable"))
+        assertTrue(safe.contains("unknown:request-failed"))
+        assertFalse(safe.contains("UNTRUSTED_SECRET"))
+        assertFalse(safe.contains("private.invalid"))
+        assertFalse(safe.contains("private-agent"))
+    }
+
     @Test fun botGuardFailureReachesConnectedLegacyFallbackAndCancellationEscapes() {
         val provider = WebBotGuardTokenProvider(object : BotGuardMinter {
             override suspend fun mint(videoId: String, visitorData: String): PoTokenResult = throw IOException("untrusted fixture")

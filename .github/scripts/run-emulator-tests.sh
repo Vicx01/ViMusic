@@ -51,4 +51,16 @@ adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
 export JAVA_HOME="${VIMUSIC_GRADLE_JAVA_HOME:-${JAVA_HOME_11_X64:?Missing Gradle JDK}}"
 export PATH="$JAVA_HOME/bin:$PATH"
-.github/scripts/gradle-ci.sh :app:connectedDebugAndroidTest
+if [ "${VIMUSIC_MODERN_LIVE_PROBE:-0}" = "1" ]; then
+    set +e
+    .github/scripts/gradle-ci.sh :app:connectedDebugAndroidTest \
+        -Pandroid.testInstrumentationRunnerArguments.class=it.vfsfitvnm.vimusic.service.LiveInnerTubeXPlaybackTest \
+        -Pandroid.testInstrumentationRunnerArguments.vimusicLive=1
+    result=$?
+    # Only the app's explicitly sanitized diagnostics tag is collected.
+    adb logcat -d -v raw -s ViMusicPlayback:I '*:S' > "${RUNNER_TEMP}/vimusic-live-probe.log" 2>/dev/null
+    set -e
+    exit "$result"
+else
+    .github/scripts/gradle-ci.sh :app:connectedDebugAndroidTest
+fi

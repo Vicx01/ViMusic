@@ -84,6 +84,8 @@ import it.vfsfitvnm.vimusic.models.QueuedMediaItem
 import it.vfsfitvnm.vimusic.query
 import it.vfsfitvnm.vimusic.service.innertubex.ModernDataSpecResolver
 import it.vfsfitvnm.vimusic.service.innertubex.ModernPlayback
+import it.vfsfitvnm.vimusic.service.innertubex.safeModernFailure
+import it.vfsfitvnm.vimusic.service.innertubex.safeStreamClient
 import it.vfsfitvnm.vimusic.utils.InvincibleService
 import it.vfsfitvnm.vimusic.utils.TimerJob
 import it.vfsfitvnm.vimusic.utils.YouTubeRadio
@@ -891,7 +893,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             isCached = { _, _ -> false },
             resolve = { videoId ->
                 val stream = runBlocking(Dispatchers.IO) { modern.resolve(videoId) }
-                Log.i("ViMusicPlayback", "InnerTubeX progressive stream resolved")
+                Log.i("ViMusicPlayback", "InnerTubeX progressive stream resolved client=${safeStreamClient(stream.clientName)} itag=${stream.itag}")
                 val mediaItem = runBlocking(Dispatchers.Main) { player.findNextMediaItemById(videoId) }
                 // Format is shared with the legacy offline browser. Do not replace
                 // its metadata while the legacy representation still has cache bytes.
@@ -900,7 +902,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 stream
             },
             fallback = legacyResolver,
-            onModernFailure = { Log.w("ViMusicPlayback", "InnerTubeX resolution failed; trying legacy provider") }
+            onModernFailure = { error -> Log.w("ViMusicPlayback", "InnerTubeX resolution failed ${safeModernFailure(error)}; trying legacy provider") }
         )
         return recoveringPlaybackFactory(createCacheDataSource(), resolver, legacyResolver) { videoId ->
             legacyResolver.invalidate(videoId)
