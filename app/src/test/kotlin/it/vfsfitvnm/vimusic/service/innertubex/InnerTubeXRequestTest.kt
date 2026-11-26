@@ -35,7 +35,9 @@ class InnerTubeXRequestTest {
             tube.player(YouTubeClient.ANDROID_VR_1_43_32, "fixture-b")
             assertEquals(2, requests.size)
             val bodies = requests.map { request ->
-                assertEquals("www.youtube.com", request.url.host)
+                assertEquals("music.youtube.com", request.url.host)
+                assertEquals("28", request.headers["X-YouTube-Client-Name"])
+                assertEquals(YouTubeClient.ANDROID_VR_1_43_32.clientVersion, request.headers["X-YouTube-Client-Version"])
                 assertEquals("/youtubei/v1/player", request.url.encodedPath)
                 assertNull(request.headers["X-Goog-Api-Key"])
                 assertNull(request.url.parameters["key"])
@@ -51,7 +53,8 @@ class InnerTubeXRequestTest {
             assertEquals("ANDROID_VR", bodies[0]["context"]?.jsonObject?.get("client")?.jsonObject?.get("clientName")?.jsonPrimitive?.content)
             assertEquals(YouTubeClient.ANDROID_VR_1_43_32.clientVersion,
                 bodies[0]["context"]?.jsonObject?.get("client")?.jsonObject?.get("clientVersion")?.jsonPrimitive?.content)
-            assertEquals(bodies[0].filterKeys { it != "videoId" }, bodies[1].filterKeys { it != "videoId" })
+            assertTrue("Only video ID should differ between the controlled request bodies",
+                bodies[0].filterKeys { it != "videoId" } == bodies[1].filterKeys { it != "videoId" })
         } finally {
             tube.close()
             client.close()
