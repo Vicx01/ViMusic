@@ -4,6 +4,8 @@ import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpResponseValidator
+import android.util.Log
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -12,6 +14,17 @@ import kotlinx.serialization.json.Json
 internal class ModernPlayback(context: Context) {
     private val client = HttpClient(OkHttp) {
         expectSuccess = false
+        HttpResponseValidator {
+            validateResponse { response ->
+                val request = response.call.request
+                val details = safeHttpObservation(
+                    request.url.host, request.url.encodedPath, response.status.value,
+                    request.headers.contains("X-Goog-Api-Key"), request.url.parameters.contains("key"),
+                    request.headers["X-YouTube-Client-Name"], request.headers["X-YouTube-Client-Version"],
+                )
+                Log.i("ViMusicPlayback", "STREAM_HTTP $details")
+            }
+        }
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true })
         }

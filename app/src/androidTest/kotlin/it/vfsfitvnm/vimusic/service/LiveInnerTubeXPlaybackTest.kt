@@ -36,7 +36,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LiveInnerTubeXPlaybackTest {
     @Test(timeout = 210_000)
-    fun liveInnerTubeXPlaybackOverThirtySeconds() {
+    fun liveInnerTubeXQuickPicksFixture() = runFixture("J7p4bzqLvCw", "quickpicks")
+
+    @Test(timeout = 210_000)
+    fun liveInnerTubeXControlFixture() = runFixture("dQw4w9WgXcQ", "control")
+
+    private fun runFixture(videoId: String, label: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assumeTrue(InstrumentationRegistry.getArguments().getString("vimusicLive") == "1")
         val context = instrumentation.targetContext
@@ -70,11 +75,12 @@ class LiveInnerTubeXPlaybackTest {
         try {
             instrumentation.runOnMainSync {
                 installPlaybackMedia3Log()
-                val instance = ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(factory, extractors)).build()
+                val instance = ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(factory, extractors)
+                    .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(0))).build()
                 player = instance
                 // Existing public QuickPicks fixture; no private history or user credentials.
-                instance.setMediaItem(MediaItem.Builder().setMediaId("J7p4bzqLvCw").setUri("J7p4bzqLvCw")
-                    .setCustomCacheKey("J7p4bzqLvCw").build())
+                instance.setMediaItem(MediaItem.Builder().setMediaId(videoId).setUri(videoId)
+                    .setCustomCacheKey(videoId).build())
                 instance.prepare()
                 instance.play()
             }
@@ -92,12 +98,12 @@ class LiveInnerTubeXPlaybackTest {
                 cause = cause.cause
             }
             val result = if (position >= 35_000 && failure == null && fallbacks.get() == 0) "passed" else "failed"
-            Log.i("ViMusicPlayback", "LIVE_PROBE result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()}")
+            Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()}")
             if (result != "passed") throw AssertionError("Live InnerTubeX probe failed; see sanitized LIVE_PROBE diagnostics")
         } catch (failure: AssertionError) {
             throw failure
         } catch (failure: Throwable) {
-            Log.w("ViMusicPlayback", "LIVE_PROBE result=failed phase=unexpected")
+            Log.w("ViMusicPlayback", "LIVE_PROBE fixture=$label result=failed phase=unexpected")
             throw AssertionError("Live InnerTubeX probe failed unexpectedly; sensitive details omitted")
         } finally {
             instrumentation.runOnMainSync { player?.release() }

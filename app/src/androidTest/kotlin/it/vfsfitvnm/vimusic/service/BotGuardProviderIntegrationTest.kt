@@ -59,6 +59,12 @@ class BotGuardProviderIntegrationTest {
         assertFalse(safe.contains("UNTRUSTED_SECRET"))
         assertFalse(safe.contains("private.invalid"))
         assertFalse(safe.contains("private-agent"))
+        val http = it.vfsfitvnm.vimusic.service.innertubex.safeHttpObservation(
+            "private.invalid", "/?token=UNTRUSTED_SECRET", 403, true, false, "UNTRUSTED_SECRET", "UNTRUSTED_SECRET")
+        assertTrue(http.contains("http=403"))
+        assertTrue(http.contains("keyHeader=true"))
+        assertFalse(http.contains("UNTRUSTED_SECRET"))
+        assertFalse(http.contains("private.invalid"))
     }
 
     @Test fun botGuardFailureReachesConnectedLegacyFallbackAndCancellationEscapes() {

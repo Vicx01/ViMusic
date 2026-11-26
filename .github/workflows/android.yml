@@ -64,7 +64,7 @@ jobs:
           import pathlib, xml.etree.ElementTree as ET
           reports = list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*innertubex*.xml'))
           cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
-          required = {'constructionAndCleanupRequireNoNetwork', 'preservesStreamFieldsButRedactsDiagnosticString', 'explicitlyFlagsBothBoundedAndChunkedStreams', 'cacheExpiresAndDoesNotCrossSessionGenerations', 'unknownExpiryAndInvalidationDoNotReuseUrls'}
+          required = {'constructionAndCleanupRequireNoNetwork', 'preservesStreamFieldsButRedactsDiagnosticString', 'explicitlyFlagsBothBoundedAndChunkedStreams', 'cacheExpiresAndDoesNotCrossSessionGenerations',  'unknownExpiryAndInvalidationDoNotReuseUrls', 'publishedAndroidVrRequestKeepsIdentityBodyHostAndKeyHandling'}
           executed = {case.get('name') for case in cases if case.find('skipped') is None}
           failed = {case.get('name') for case in cases if case.find('failure') is not None or case.find('error') is not None}
           if required - executed or failed:
