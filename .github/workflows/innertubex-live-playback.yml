@@ -41,7 +41,7 @@ jobs:
           import os, pathlib, re
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'vimusic-live-probe.log'
           if path.exists():
-              lines = [line for line in path.read_text(errors='replace').splitlines() if re.fullmatch(r'(?:LIVE_(?:RESOLVED|RESOLVE_FAILED|PROBE)|STREAM_HTTP) [A-Za-z0-9_=,:. -]{1,700}', line)]
+              lines = [line for line in path.read_text(errors='replace').splitlines() if re.fullmatch(r'(?:LIVE_(?:RESOLVED|RESOLVE_FAILED|PROBE|KEY)|STREAM_HTTP) [A-Za-z0-9_=,:. -]{1,700}', line)]
               if lines:
                   print('::notice title=Live InnerTubeX probe::' + '%0A'.join(lines[-30:]))
           PY
