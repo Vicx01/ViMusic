@@ -13,7 +13,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            // The app shrinks the complete dependency graph. Shrinking this
+            // library independently removes classes referenced by the app.
+            isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
