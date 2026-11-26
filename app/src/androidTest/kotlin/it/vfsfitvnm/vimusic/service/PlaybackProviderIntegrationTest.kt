@@ -21,9 +21,9 @@ import kotlin.time.Instant
 
 @RunWith(AndroidJUnit4::class)
 class PlaybackProviderIntegrationTest {
-    private fun stream(number: Int, itag: Int = 251, expiry: Long? = 100_000) = StreamSnapshot.from(
+    private fun stream(number: Int, itag: Int = 251, expiry: Long? = 100_000, headers: Map<String, String> = mapOf("X-Stream" to "fixture")) = StreamSnapshot.from(
         ExtractedStream(videoId = "song", audioUrl = "https://fixture.invalid/$number",
-            headers = mapOf("X-Stream" to "fixture"), loudnessDb = null,
+            headers = headers, loudnessDb = null,
             expiresAt = expiry?.let { Instant.fromEpochMilliseconds(it) }, contentLengthBytes = 1_000_000,
             itag = itag, mimeType = "audio/webm", codecs = "opus", bitrate = 128_000,
             sampleRate = 48_000, clientName = "fixture", profileId = "fixture",
@@ -117,6 +117,81 @@ class PlaybackProviderIntegrationTest {
             assertTrue(e.message.orEmpty().contains("representation changed"))
         }
         assertEquals(2, second.opened.size) // different itag was never opened
+    }
+
+    @Test(timeout = 90_000) fun connectedModernPlayerPassesThirtySecondsSeeksAndCompletes() {
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val bytes = instrumentation.context.assets.open("playback-regression.m4a").use { it.readBytes() }
+        val server = RangeTestServer(bytes)
+        val directory = java.io.File(context.cacheDir, "modern-playback-${System.nanoTime()}")
+        val cache = androidx.media3.datasource.cache.SimpleCache(directory,
+            androidx.media3.datasource.cache.NoOpCacheEvictor(), androidx.media3.database.StandaloneDatabaseProvider(context))
+        var resolves = 0
+        var refreshes = 0
+        var requests = 0
+        val legacy = ResolvingDataSource.Resolver { fail("unexpected fallback"); it }
+        val resolver = ModernDataSpecResolver({ _, _ -> false }, {
+            resolves++
+            stream(resolves, headers = mapOf("X-Regression-Header" to "modern"))
+        }, legacy, { fail("unexpected fallback") }, { 0L })
+        val transport = DataSource.Factory {
+            val http = androidx.media3.datasource.DefaultHttpDataSource.Factory().createDataSource()
+            object : DataSource by http {
+                override fun open(dataSpec: DataSpec): Long {
+                    requests++
+                    if (requests == 1) throw HttpDataSource.InvalidResponseCodeException(403, null, null, emptyMap(), dataSpec, byteArrayOf())
+                    return http.open(dataSpec.withUri(Uri.parse(server.url)))
+                }
+            }
+        }
+        val cacheFactory = androidx.media3.datasource.cache.CacheDataSource.Factory().setCache(cache)
+            .setUpstreamDataSourceFactory(transport)
+        val sources = recoveringPlaybackFactory(cacheFactory, resolver, legacy) { refreshes++ }
+        val extractors = androidx.media3.extractor.ExtractorsFactory {
+            arrayOf(androidx.media3.extractor.mkv.MatroskaExtractor(), androidx.media3.extractor.mp4.FragmentedMp4Extractor())
+        }
+        var player: androidx.media3.exoplayer.ExoPlayer? = null
+        try {
+            instrumentation.runOnMainSync {
+                val instance = androidx.media3.exoplayer.ExoPlayer.Builder(context)
+                    .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(sources, extractors))
+                    .build()
+                player = instance
+                instance.setMediaItem(androidx.media3.common.MediaItem.Builder().setMediaId("song")
+                    .setUri("song").setCustomCacheKey("song").setMimeType("audio/mp4").build())
+                instance.prepare()
+                instance.setPlaybackSpeed(4f)
+                instance.play()
+            }
+            var position = 0L
+            var state = androidx.media3.common.Player.STATE_IDLE
+            var error: androidx.media3.common.PlaybackException? = null
+            val deadline = android.os.SystemClock.elapsedRealtime() + 60_000
+            while (position < 37_000 && android.os.SystemClock.elapsedRealtime() < deadline) {
+                instrumentation.runOnMainSync { checkNotNull(player).let { position = it.currentPosition; state = it.playbackState; error = it.playerError } }
+                if (error != null || state == androidx.media3.common.Player.STATE_ENDED) break
+                android.os.SystemClock.sleep(100)
+            }
+            assertNull("modern fixture player failed", error)
+            assertTrue("modern fixture stalled before 37 seconds at $position", position >= 37_000)
+            instrumentation.runOnMainSync { checkNotNull(player).seekTo(46_000) }
+            while (state != androidx.media3.common.Player.STATE_ENDED && android.os.SystemClock.elapsedRealtime() < deadline) {
+                instrumentation.runOnMainSync { checkNotNull(player).let { state = it.playbackState; error = it.playerError } }
+                if (error != null) break
+                android.os.SystemClock.sleep(100)
+            }
+            assertNull("modern fixture failed after seek", error)
+            assertEquals(androidx.media3.common.Player.STATE_ENDED, state)
+            assertEquals(1, refreshes)
+            assertEquals(2, resolves)
+            assertTrue(server.regressionHeaders.contains("modern"))
+        } finally {
+            instrumentation.runOnMainSync { player?.release() }
+            cache.release()
+            server.close()
+            directory.deleteRecursively()
+        }
     }
 
     @Test fun cancellationDoesNotFallBackOrRetry() {
