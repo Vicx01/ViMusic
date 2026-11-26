@@ -39,7 +39,7 @@ internal class RecoveringPlaybackDataSource(
             val representation = candidate.key ?: throw IOException("A resolved cache key is required")
             val accepted = acceptedKeys[id]
             if (accepted != null && accepted != representation) {
-                throw IOException("Stream representation changed; restart this track", lastFailure)
+                throw IOException("Stream representation changed; restart the playback service", lastFailure)
             }
             try {
                 val result = upstream.open(candidate)
@@ -50,7 +50,7 @@ internal class RecoveringPlaybackDataSource(
                 }
                 if (changed) {
                     upstream.close()
-                    throw IOException("Concurrent stream representation changed; restart this track")
+                    throw IOException("Concurrent stream representation changed; restart the playback service")
                 }
                 return result
             } catch (failure: HttpDataSource.InvalidResponseCodeException) {

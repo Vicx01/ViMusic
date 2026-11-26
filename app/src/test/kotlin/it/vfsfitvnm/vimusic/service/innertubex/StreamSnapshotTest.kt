@@ -59,6 +59,14 @@ class StreamSnapshotTest {
         assertTrue(cache.get("fixture", 2L, 100L) === value)
     }
 
+    @Test fun cacheBoundsRetainedStreamCredentials() {
+        val cache = StreamCache(initialGeneration = 1L)
+        val value = StreamSnapshot.from(stream())
+        repeat(21) { cache.put("song-$it", 1L, value, 100L) }
+        assertEquals(null, cache.get("song-0", 1L, 100L))
+        assertTrue(cache.get("song-20", 1L, 100L) === value)
+    }
+
     @Test fun unknownExpiryAndInvalidationDoNotReuseUrls() {
         val cache = StreamCache(initialGeneration = 1L)
         val value = StreamSnapshot.from(stream())

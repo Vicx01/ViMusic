@@ -90,6 +90,32 @@ class LiveInnerTubeXPlaybackTest {
                 if (failure != null || state == Player.STATE_ENDED) break
                 SystemClock.sleep(200)
             }
+            var paused = false
+            var sought = false
+            var completed = false
+            if (position >= 35_000 && failure == null && fallbacks.get() == 0) {
+                var duration = androidx.media3.common.C.TIME_UNSET
+                instrumentation.runOnMainSync {
+                    checkNotNull(player).let { it.pause(); duration = it.duration }
+                }
+                SystemClock.sleep(500)
+                instrumentation.runOnMainSync { paused = !checkNotNull(player).isPlaying }
+                if (duration != androidx.media3.common.C.TIME_UNSET && duration > 45_000) {
+                    instrumentation.runOnMainSync {
+                        checkNotNull(player).let { it.seekTo(duration - 4_000); it.play() }
+                    }
+                    val endDeadline = SystemClock.elapsedRealtime() + 40_000
+                    while (state != Player.STATE_ENDED && SystemClock.elapsedRealtime() < endDeadline) {
+                        instrumentation.runOnMainSync { checkNotNull(player).let {
+                            position = it.currentPosition; state = it.playbackState; failure = it.playerError
+                        } }
+                        if (position >= duration - 6_000) sought = true
+                        if (failure != null) break
+                        SystemClock.sleep(200)
+                    }
+                    completed = state == Player.STATE_ENDED && failure == null
+                }
+            }
             var status = 0
             var cause: Throwable? = failure
             val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
@@ -97,8 +123,8 @@ class LiveInnerTubeXPlaybackTest {
                 if (cause is HttpDataSource.InvalidResponseCodeException) status = cause.responseCode
                 cause = cause.cause
             }
-            val result = if (position >= 35_000 && failure == null && fallbacks.get() == 0) "passed" else "failed"
-            Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()}")
+            val result = if (position >= 35_000 && failure == null && fallbacks.get() == 0 && paused && sought && completed) "passed" else "failed"
+            Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()} paused=$paused sought=$sought completed=$completed")
             if (result != "passed") throw AssertionError("Live InnerTubeX probe failed; see sanitized LIVE_PROBE diagnostics")
         } catch (failure: AssertionError) {
             throw failure

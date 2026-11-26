@@ -46,7 +46,10 @@ internal class StreamSnapshot private constructor(
 
 /** In-memory URL metadata only; never touches Media3's on-disk audio cache. */
 internal class StreamCache(initialGeneration: Long) {
-    private val entries = mutableMapOf<String, StreamSnapshot>()
+    // Signed URLs are short-lived; do not retain an unbounded history in memory.
+    private val entries = object : LinkedHashMap<String, StreamSnapshot>(20, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StreamSnapshot>?): Boolean = size > 20
+    }
     private var activeGeneration = initialGeneration
 
     /** Must be called by the host for logout, account or visitor-session changes. */
