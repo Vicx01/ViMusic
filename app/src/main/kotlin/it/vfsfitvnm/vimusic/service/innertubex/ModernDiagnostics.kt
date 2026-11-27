@@ -26,14 +26,14 @@ internal fun safeModernFailure(error: Exception): String {
     // Some bounded bootstrap requests use a separate client and surface an exact
     // "HTTP NNN" IllegalStateException instead of a Ktor ResponseException.
     // Parse only that exact fixed shape; never include arbitrary exception text.
-    val boundedHttp = causes.filterIsInstance<IllegalStateException>().firstNotNullOfOrNull { cause ->
+    val exactHttp = causes.filterIsInstance<IllegalStateException>().firstNotNullOfOrNull { cause ->
         Regex("^HTTP ([1-5][0-9]{2})$").matchEntire(cause.message.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
     }
     val status = (response?.response?.status?.value
         ?: causes.filterIsInstance<InnerTubeHttpException>().firstOrNull()?.status?.value
-        ?: boundedHttp)?.takeIf { it in 100..599 }?.toString() ?: "none"
+        ?: exactHttp)?.takeIf { it in 100..599 }?.toString() ?: "none"
     val category = when {
-        boundedHttp != null -> "bounded-http"
+        exactHttp != null -> "http-exact"
         causes.any { it is InnerTubeHttpException || it is ResponseException } -> "http"
         causes.any { it is java.net.SocketTimeoutException } -> "timeout"
         causes.any { it is java.net.UnknownHostException } -> "dns"
