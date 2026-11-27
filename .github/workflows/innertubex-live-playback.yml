@@ -41,7 +41,7 @@ jobs:
           import os, pathlib, re
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'vimusic-live-probe.log'
           if path.exists():
-              lines = [line for line in path.read_text(errors='replace').splitlines() if re.fullmatch(r'(?:LIVE_(?:RESOLVED|RESOLVE_FAILED|PROBE|KEY|MATRIX|TOKEN|DIRECT|WATCH|BOOTSTRAP)|STREAM_(?:HTTP|SELECTED|REQUEST)|BOTGUARD) [A-Za-z0-9_=,:. -]{1,700}', line)]
+              lines = [line for line in path.read_text(errors='replace').splitlines() if re.fullmatch(r'(?:LIVE_(?:RESOLVED|RESOLVE_FAILED|PROBE|KEY|MATRIX|TOKEN|DIRECT|WATCH|BOOTSTRAP|FIXTURE|COMPARE|COMPARE_RESULT)|STREAM_(?:HTTP|SELECTED|REQUEST)|BOTGUARD) [A-Za-z0-9_=,:. -]{1,700}', line)]
               if lines:
                   # GitHub truncates an individual annotation at 4096 characters.
                   chunk = []

@@ -54,7 +54,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 if [ "${VIMUSIC_MODERN_LIVE_PROBE:-0}" = "1" ]; then
     set +e
     .github/scripts/gradle-ci.sh :app:connectedDebugAndroidTest \
-        -Pandroid.testInstrumentationRunnerArguments.class=it.vfsfitvnm.vimusic.service.LiveInnerTubeXPlaybackTest,it.vfsfitvnm.vimusic.service.LiveKeyPlacementTest,it.vfsfitvnm.vimusic.service.LiveStrategyMatrixTest \
+        -Pandroid.testInstrumentationRunnerArguments.class=it.vfsfitvnm.vimusic.service.LiveInnerTubeXPlaybackTest,it.vfsfitvnm.vimusic.service.LiveKeyPlacementTest,it.vfsfitvnm.vimusic.service.LiveStrategyMatrixTest,it.vfsfitvnm.vimusic.service.LiveRequestComparisonTest \
         -Pandroid.testInstrumentationRunnerArguments.vimusicLive=1
     result=$?
     # Only the app's explicitly sanitized diagnostics tag is collected.

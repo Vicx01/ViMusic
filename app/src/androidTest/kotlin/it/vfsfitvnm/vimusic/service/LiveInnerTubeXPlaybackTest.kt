@@ -35,11 +35,17 @@ import org.junit.runner.RunWith
 /** Explicitly opted-in live network probe. Never uses a user's account, queue or media ID. */
 @RunWith(AndroidJUnit4::class)
 class LiveInnerTubeXPlaybackTest {
-    @Test(timeout = 210_000)
+    @Test(timeout = 240_000)
     fun liveInnerTubeXQuickPicksFixture() = runFixture("J7p4bzqLvCw", "quickpicks")
 
-    @Test(timeout = 210_000)
+    @Test(timeout = 240_000)
     fun liveInnerTubeXControlFixture() = runFixture("dQw4w9WgXcQ", "control")
+
+    @Test(timeout = 240_000)
+    fun livePublicPopFixture() = runFixture("9bZkp7q19f0", "public-pop")
+
+    @Test(timeout = 240_000)
+    fun livePublicClassicalFixture() = runFixture("rOjHhS5MtvA", "public-classical")
 
     private fun runFixture(videoId: String, label: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -125,7 +131,19 @@ class LiveInnerTubeXPlaybackTest {
             }
             val result = if (position >= 35_000 && failure == null && fallbacks.get() == 0 && paused && sought && completed) "passed" else "failed"
             Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()} paused=$paused sought=$sought completed=$completed")
-            if (result != "passed") throw AssertionError("Live InnerTubeX probe failed; see sanitized LIVE_PROBE diagnostics")
+            if (result != "passed") {
+                // Only classify a fixture restriction if an independent anonymous watch
+                // response for the same video explicitly corroborates it. HTTP 200,
+                // LOGIN_REQUIRED and UNPLAYABLE alone are never sufficient.
+                val restriction = IndependentWatchAvailability.confirmedRestriction(videoId)
+                if (restriction != null) {
+                    Log.i("ViMusicPlayback", "LIVE_FIXTURE fixture=$label result=restricted reason=$restriction")
+                    assumeTrue("Fixture has independently corroborated restriction: $restriction", false)
+                }
+                throw AssertionError("Live InnerTubeX probe failed; see sanitized LIVE_PROBE diagnostics")
+            }
+        } catch (skipped: org.junit.AssumptionViolatedException) {
+            throw skipped
         } catch (failure: AssertionError) {
             throw failure
         } catch (failure: Throwable) {
