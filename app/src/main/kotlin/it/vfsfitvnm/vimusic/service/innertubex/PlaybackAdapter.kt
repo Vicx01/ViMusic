@@ -39,6 +39,9 @@ internal class PlaybackAdapter(client: HttpClient, tokenProvider: TokenProvider)
 
     suspend fun refreshAfterStreamRejection(): Boolean = cipher.refreshAfterStreamRejection()
 
+    /** Diagnostic opt-in only; the normal provider does not currently prefetch visitor data. */
+    suspend fun probeVisitorBootstrap(): Boolean = !innerTube.fetchFreshVisitorData().isNullOrBlank()
+
     /** Network is used only when an explicit caller invokes this method. */
     suspend fun resolve(videoId: String, clientOverrideId: String? = null): StreamSnapshot {
         val stream = requireNotNull(extractor.extract(

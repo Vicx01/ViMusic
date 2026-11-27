@@ -15,6 +15,9 @@ import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpSendPipeline
+import io.ktor.client.request.prepareGet
+import io.ktor.client.request.parameter
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.content.TextContent
 import io.ktor.http.encodedPath
@@ -127,6 +130,7 @@ class LiveStrategyMatrixTest {
         enabled()
         val client = HttpClient(OkHttp) {
             expectSuccess = false
+            followRedirects = false
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) { requestTimeoutMillis = 20_000; connectTimeoutMillis = 10_000; socketTimeoutMillis = 15_000 }
         }
@@ -140,7 +144,17 @@ class LiveStrategyMatrixTest {
             )
             val profiles = listOf("VISIONOS_0_1" to YouTubeClient.VISIONOS_0_1, "WEB_REMIX" to YouTubeClient.WEB_REMIX,
                 "WEB_EMBEDDED_PLAYER" to YouTubeClient.WEB_EMBEDDED_PLAYER)
-            for ((label, video) in fixtures) for ((profile, ytClient) in profiles) {
+            for ((label, video) in fixtures) {
+                val watchHttp = try {
+                    client.prepareGet("https://www.youtube.com/watch") {
+                        parameter("v", video)
+                        header("User-Agent", YouTubeClient.USER_AGENT_WEB)
+                        header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    }.execute { response -> response.status.value }
+                } catch (cancelled: CancellationException) { currentCoroutineContext().ensureActive(); 0 }
+                catch (_: Exception) { 0 }
+                Log.i("ViMusicPlayback", "LIVE_WATCH fixture=$label http=$watchHttp")
+                for ((profile, ytClient) in profiles) {
                 var http = 0
                 var status = "unknown"
                 var reason = "unknown"
@@ -155,8 +169,8 @@ class LiveStrategyMatrixTest {
                         val rawReason = playability?.get("reason")?.jsonPrimitive?.content.orEmpty().lowercase()
                         reason = when {
                             rawReason.isBlank() -> "none"
-                            "bot" in rawReason -> "bot-check"
-                            "age" in rawReason -> "age-check"
+                            "not a bot" in rawReason || "unusual traffic" in rawReason -> "bot-check"
+                            listOf("confirm your age", "age-restricted", "age restricted", "age verification").any { it in rawReason } -> "age-check"
                             "country" in rawReason || "region" in rawReason -> "region"
                             "sign in" in rawReason || "login" in rawReason -> "sign-in"
                             "private" in rawReason -> "private"
@@ -170,8 +184,49 @@ class LiveStrategyMatrixTest {
                 } catch (failure: InnerTubeHttpException) { http = failure.status.value; reason = "http-error" }
                 catch (_: Exception) { reason = "network-or-decode-error" }
                 Log.i("ViMusicPlayback", "LIVE_DIRECT fixture=$label profile=$profile http=$http status=$status reason=$reason visitor=${!visitor.isNullOrBlank()} token=absent")
+                }
             }
         } finally { try { tube.close() } finally { client.close() } }
+    }
+
+
+    /** Compare the ordinary automatic path with an explicitly visitor-primed session. */
+    @Test(timeout = 180_000) fun compareVisitorBootstrap() = runBlocking {
+        enabled()
+        for (prime in listOf(false, true)) {
+            val provider = WebBotGuardTokenProvider(InstrumentationRegistry.getInstrumentation().targetContext)
+            val client = HttpClient(OkHttp) {
+                expectSuccess = false
+                install(ContentNegotiation) { json(json) }
+                install(HttpTimeout) { requestTimeoutMillis = 60_000; connectTimeoutMillis = 30_000; socketTimeoutMillis = 60_000 }
+            }
+            val adapter = PlaybackAdapter(client, provider)
+            var visitor = false
+            try {
+                if (prime) visitor = adapter.probeVisitorBootstrap()
+                val stream = adapter.resolve("dQw4w9WgXcQ")
+                var mediaHttp = 0
+                var readable = false
+                val uri = Uri.parse(stream.url)
+                if (uri.scheme == "https" && uri.host?.endsWith(".googlevideo.com") == true &&
+                    stream.headers.keys.none { it.equals("Range", ignoreCase = true) }) {
+                    val request = Request.Builder().url(stream.url).header("Range", "bytes=0-65535")
+                    stream.headers.forEach { (key, value) -> request.header(key, value) }
+                    val media = okhttp3.OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+                        .callTimeout(20, TimeUnit.SECONDS).build()
+                    media.newCall(request.build()).execute().use { response ->
+                        mediaHttp = response.code
+                        readable = (response.code == 200 || response.code == 206) && response.body?.source()?.request(1) == true
+                    }
+                }
+                Log.i("ViMusicPlayback", "LIVE_BOOTSTRAP primed=$prime visitor=$visitor result=resolved client=${safeStreamClient(stream.clientName)} itag=${stream.itag} mediaHttp=$mediaHttp readable=$readable")
+            } catch (cancelled: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                Log.i("ViMusicPlayback", "LIVE_BOOTSTRAP primed=$prime visitor=$visitor result=failed reason=timeout")
+            } catch (error: Exception) {
+                Log.i("ViMusicPlayback", "LIVE_BOOTSTRAP primed=$prime visitor=$visitor result=failed ${safeModernFailure(error)}")
+            } finally { try { adapter.close() } finally { try { provider.close() } finally { client.close() } } }
+        }
     }
 
     @Test(timeout = 120_000) fun realBotGuardAndPlayerAttachment() = runBlocking {

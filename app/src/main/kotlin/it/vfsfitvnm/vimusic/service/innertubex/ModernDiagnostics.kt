@@ -1,6 +1,7 @@
 package it.vfsfitvnm.vimusic.service.innertubex
 
 import com.metrolist.innertubex.extraction.StreamResolveException
+import com.metrolist.innertubex.InnerTubeHttpException
 import io.ktor.client.plugins.ResponseException
 
 /** Restrict diagnostics to fixed categories and library-defined client names. */
@@ -22,7 +23,25 @@ internal fun safeModernFailure(error: Exception): String {
     }
     val failure = causes.filterIsInstance<StreamResolveException>().firstOrNull()
     val response = causes.filterIsInstance<ResponseException>().firstOrNull()
-    val status = response?.response?.status?.value?.takeIf { it in 100..599 }?.toString() ?: "none"
+    // Some bounded bootstrap requests use a separate client and surface an exact
+    // "HTTP NNN" IllegalStateException instead of a Ktor ResponseException.
+    // Parse only that exact fixed shape; never include arbitrary exception text.
+    val boundedHttp = causes.filterIsInstance<IllegalStateException>().firstNotNullOfOrNull { cause ->
+        Regex("^HTTP ([1-5][0-9]{2})$").matchEntire(cause.message.orEmpty())?.groupValues?.get(1)?.toIntOrNull()
+    }
+    val status = (response?.response?.status?.value
+        ?: causes.filterIsInstance<InnerTubeHttpException>().firstOrNull()?.status?.value
+        ?: boundedHttp)?.takeIf { it in 100..599 }?.toString() ?: "none"
+    val category = when {
+        boundedHttp != null -> "bounded-http"
+        causes.any { it is InnerTubeHttpException || it is ResponseException } -> "http"
+        causes.any { it is java.net.SocketTimeoutException } -> "timeout"
+        causes.any { it is java.net.UnknownHostException } -> "dns"
+        causes.any { it is javax.net.ssl.SSLException } -> "tls"
+        causes.any { it is java.io.IOException } -> "io"
+        failure?.cause != null -> "other"
+        else -> "unknown"
+    }
     val host = response?.response?.call?.request?.url?.host?.takeIf {
         it in setOf("www.youtube.com", "music.youtube.com", "youtubei.googleapis.com", "youtube.com")
     } ?: "other-or-unknown"
@@ -42,7 +61,7 @@ internal fun safeModernFailure(error: Exception): String {
         }
         "${safeStreamClient(attempt.clientName)}:$outcome"
     }
-    return "reason=${failure?.reason?.name ?: "other"} http=$status host=$host attempts=${attempts.ifEmpty { "none" }}"
+    return "reason=${failure?.reason?.name ?: "other"} http=$status host=$host cause=$category attempts=${attempts.ifEmpty { "none" }}"
 }
 
 /** Never include paths, query strings, headers or server messages in HTTP diagnostics. */
