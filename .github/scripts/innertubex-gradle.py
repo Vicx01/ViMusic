@@ -4,8 +4,10 @@ import argparse
 import os
 from pathlib import Path
 import re
+import random
 import subprocess
 import sys
+import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--project', required=True)
@@ -19,7 +21,20 @@ if not arguments:
     parser.error('at least one Gradle argument is required')
 
 command = ['gradle', '-p', options.project, '--no-daemon', '--console=plain', *arguments]
-result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
+# Retry dependency-only rate limiting, never a compiler or test failure.
+for attempt in range(1, 4):
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
+    output = result.stdout
+    retryable = (
+        result.returncode != 0
+        and 'Received status code 429' in output
+        and 'Could not resolve' in output
+        and not re.search(r'There were failing tests|Tests failed|^e: |: error:', output, re.MULTILINE)
+    )
+    if not retryable or attempt == 3:
+        break
+    print(f'::warning title=Maven rate limit::Gradle dependency resolution received HTTP 429; retry {attempt} of 2.', flush=True)
+    time.sleep(attempt * 60 + random.SystemRandom().uniform(0, 30))
 
 def sanitize(text):
     text = re.sub(r'https?://[^\s\]\[<>"\']+', '[redacted-url]', text, flags=re.IGNORECASE)

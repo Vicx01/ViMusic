@@ -13,7 +13,8 @@ for attempt in 1 2 3; do
         break
     fi
     echo "::warning title=Maven rate limit::Gradle dependency resolution received HTTP 429; retry $attempt of 2."
-    sleep $((attempt * 30))
+    # Desynchronize concurrent build/emulator jobs and allow Maven time to recover.
+    sleep $((attempt * 60 + RANDOM % 30))
 done
 tail -n 120 "$log_file"
 if [ "$result" -ne 0 ]; then

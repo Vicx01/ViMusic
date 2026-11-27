@@ -35,16 +35,16 @@ import org.junit.runner.RunWith
 /** Explicitly opted-in live network probe. Never uses a user's account, queue or media ID. */
 @RunWith(AndroidJUnit4::class)
 class LiveInnerTubeXPlaybackTest {
-    @Test(timeout = 240_000)
+    @Test(timeout = 300_000)
     fun liveInnerTubeXQuickPicksFixture() = runFixture("J7p4bzqLvCw", "quickpicks")
 
-    @Test(timeout = 240_000)
+    @Test(timeout = 300_000)
     fun liveInnerTubeXControlFixture() = runFixture("dQw4w9WgXcQ", "control")
 
-    @Test(timeout = 240_000)
+    @Test(timeout = 300_000)
     fun livePublicPopFixture() = runFixture("9bZkp7q19f0", "public-pop")
 
-    @Test(timeout = 240_000)
+    @Test(timeout = 300_000)
     fun livePublicClassicalFixture() = runFixture("rOjHhS5MtvA", "public-classical")
 
     private fun runFixture(videoId: String, label: String) {
@@ -90,23 +90,27 @@ class LiveInnerTubeXPlaybackTest {
                 instance.prepare()
                 instance.play()
             }
-            val deadline = SystemClock.elapsedRealtime() + 160_000
-            while (position < 35_000 && SystemClock.elapsedRealtime() < deadline) {
+            val deadline = SystemClock.elapsedRealtime() + 200_000
+            while (position < 60_000 && SystemClock.elapsedRealtime() < deadline) {
                 instrumentation.runOnMainSync { checkNotNull(player).let { position = it.currentPosition; state = it.playbackState; failure = it.playerError } }
                 if (failure != null || state == Player.STATE_ENDED) break
                 SystemClock.sleep(200)
             }
+            // Record actual pre-seek progress: the later seek must not satisfy the
+            // sustained-playback requirement by jumping the position forward.
+            val playedBeforeSeekMs = position
+            val sustained = playedBeforeSeekMs >= 60_000 && failure == null && fallbacks.get() == 0
             var paused = false
             var sought = false
             var completed = false
-            if (position >= 35_000 && failure == null && fallbacks.get() == 0) {
+            if (sustained) {
                 var duration = androidx.media3.common.C.TIME_UNSET
                 instrumentation.runOnMainSync {
                     checkNotNull(player).let { it.pause(); duration = it.duration }
                 }
                 SystemClock.sleep(500)
                 instrumentation.runOnMainSync { paused = !checkNotNull(player).isPlaying }
-                if (duration != androidx.media3.common.C.TIME_UNSET && duration > 45_000) {
+                if (duration != androidx.media3.common.C.TIME_UNSET && duration > 70_000) {
                     instrumentation.runOnMainSync {
                         checkNotNull(player).let { it.seekTo(duration - 4_000); it.play() }
                     }
@@ -129,13 +133,17 @@ class LiveInnerTubeXPlaybackTest {
                 if (cause is HttpDataSource.InvalidResponseCodeException) status = cause.responseCode
                 cause = cause.cause
             }
-            val result = if (position >= 35_000 && failure == null && fallbacks.get() == 0 && paused && sought && completed) "passed" else "failed"
-            Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()} paused=$paused sought=$sought completed=$completed")
+            val result = if (sustained && failure == null && fallbacks.get() == 0 && paused && sought && completed) "passed" else "failed"
+            Log.i("ViMusicPlayback", "LIVE_PROBE fixture=$label result=$result positionMs=$position playedBeforeSeekMs=$playedBeforeSeekMs state=$state error=${failure?.errorCodeName ?: "none"} http=$status resolved=${resolved.get()} fallback=${fallbacks.get()} refresh=${refreshes.get()} paused=$paused sought=$sought completed=$completed")
             if (result != "passed") {
                 // Only classify a fixture restriction if an independent anonymous watch
                 // response for the same video explicitly corroborates it. HTTP 200,
                 // LOGIN_REQUIRED and UNPLAYABLE alone are never sufficient.
-                val restriction = IndependentWatchAvailability.confirmedRestriction(videoId)
+                // Never excuse a failure after a stream was resolved or playback
+                // advanced: restriction checks only apply before any media started.
+                val restriction = if (playedBeforeSeekMs == 0L && resolved.get() == 0 && refreshes.get() == 0) {
+                    IndependentWatchAvailability.confirmedRestriction(videoId)
+                } else null
                 if (restriction != null) {
                     Log.i("ViMusicPlayback", "LIVE_FIXTURE fixture=$label result=restricted reason=$restriction")
                     assumeTrue("Fixture has independently corroborated restriction: $restriction", false)
