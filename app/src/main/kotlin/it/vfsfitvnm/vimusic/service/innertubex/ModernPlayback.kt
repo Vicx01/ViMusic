@@ -16,7 +16,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 /** Owned by the playback service, created only when the experimental provider is selected. */
-internal class ModernPlayback(context: Context) {
+internal class ModernPlayback(appContext: Context) {
     private val client = HttpClient(OkHttp) {
         expectSuccess = false
         HttpResponseValidator {
@@ -57,7 +57,7 @@ internal class ModernPlayback(context: Context) {
             socketTimeoutMillis = 60_000
         }
     }
-    private val tokens = WebBotGuardTokenProvider(context)
+    private val tokens = WebBotGuardTokenProvider(appContext)
     private val adapter = PlaybackAdapter(client, tokens)
 
     suspend fun resolve(videoId: String): StreamSnapshot = adapter.resolve(videoId).also { stream ->
