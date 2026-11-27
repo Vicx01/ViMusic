@@ -14,7 +14,7 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.HttpRequestPipeline
+import io.ktor.client.request.HttpSendPipeline
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.content.TextContent
 import io.ktor.http.encodedPath
@@ -27,6 +27,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -102,7 +104,10 @@ class LiveStrategyMatrixTest {
                     }
                     Log.i("ViMusicPlayback", "LIVE_MATRIX fixture=$label profile=$profile result=resolved playerHttp=${http.get()} client=${safeStreamClient(stream.clientName)} itag=${stream.itag} format=$format expirySeconds=$expiry token=$tokenState gvsAttached=$attached mediaHttp=$mediaStatus mediaReadable=$mediaReadable")
                 } catch (cancelled: CancellationException) {
-                    throw cancelled
+                    // An extractor-owned timeout is an individual matrix result; external
+                    // cancellation must still stop the whole probe.
+                    currentCoroutineContext().ensureActive()
+                    Log.i("ViMusicPlayback", "LIVE_MATRIX fixture=$label profile=$profile result=failed playerHttp=${http.get()} reason=timeout")
                 } catch (error: Exception) {
                     val tokenState = if (minted == null) "not-observed" else "available"
                     Log.i("ViMusicPlayback", "LIVE_MATRIX fixture=$label profile=$profile result=failed playerHttp=${http.get()} token=$tokenState ${safeModernFailure(error)}")
@@ -122,14 +127,16 @@ class LiveStrategyMatrixTest {
         val tokens = WebBotGuardTokenProvider(appContext)
         var expected: String? = null
         var attached = false
+        var bodyKind = "unobserved"
         val client = HttpClient(OkHttp) {
             expectSuccess = false
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) { requestTimeoutMillis = 30_000; connectTimeoutMillis = 15_000; socketTimeoutMillis = 20_000 }
             install("VerifyTokenAttachment") {
-                requestPipeline.intercept(HttpRequestPipeline.Send) {
+                sendPipeline.intercept(HttpSendPipeline.Monitoring) {
                     if (context.url.encodedPath == "/youtubei/v1/player" && expected != null) {
                         val text = (subject as? TextContent)?.text
+                        bodyKind = if (text != null) "text" else "other"
                         val actual = runCatching { text?.let { json.parseToJsonElement(it).jsonObject["serviceIntegrityDimensions"]?.jsonObject?.get("poToken")?.jsonPrimitive?.content } }.getOrNull()
                         attached = actual != null && actual == expected
                     }
@@ -169,7 +176,7 @@ class LiveStrategyMatrixTest {
             expected = null
             try { tube.close() } finally { try { tokens.close() } finally { client.close() } }
         }
-        Log.i("ViMusicPlayback", "LIVE_TOKEN visitor=$visitor player=$player gvs=$gvs playerAttached=$attached http=$http status=$status")
+        Log.i("ViMusicPlayback", "LIVE_TOKEN visitor=$visitor player=$player gvs=$gvs playerAttached=$attached body=$bodyKind http=$http status=$status")
         assertTrue("Real BotGuard mint and player-request attachment were not verified", visitor && player && gvs && attached)
     }
 }
