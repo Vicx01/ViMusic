@@ -53,12 +53,26 @@ import it.vfsfitvnm.vimusic.models.SongAlbumMap
 import it.vfsfitvnm.vimusic.models.SongArtistMap
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
 import it.vfsfitvnm.vimusic.models.SortedSongPlaylistMap
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
 import kotlin.jvm.Throws
 import kotlinx.coroutines.flow.Flow
 
+/** Resolve the Room DAO only when a DAO method is actually called.
+ * Room can load the DAO interface while the database singleton is still building.
+ */
+internal fun deferredDatabase(resolve: () -> Database): Database =
+    Proxy.newProxyInstance(Database::class.java.classLoader, arrayOf(Database::class.java)) { _, method, args ->
+        try {
+            method.invoke(resolve(), *(args ?: emptyArray()))
+        } catch (failure: InvocationTargetException) {
+            throw failure.targetException
+        }
+    } as Database
+
 @Dao
 interface Database {
-    companion object : Database by DatabaseInitializer.Instance.database
+    companion object : Database by deferredDatabase({ DatabaseInitializer.Instance.database })
 
     @Transaction
     @Query("SELECT * FROM Song WHERE totalPlayTimeMs > 0 ORDER BY ROWID ASC")
@@ -480,24 +494,55 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
     companion object {
         lateinit var Instance: DatabaseInitializer
 
+        // Explicit migrations override Room's generated 3->4 and 5->6 paths.
+        // Keep this list shared with migration tests and all database builders.
+        fun migrations(): Array<Migration> = arrayOf(
+            PreserveQueueFrom3To4(),
+            RestoreQueueFrom5To6(),
+            From8To9Migration(),
+            From10To11Migration(),
+            From14To15Migration(),
+            From22To23Migration(),
+        )
+
         context(Context)
         operator fun invoke() {
             if (!::Instance.isInitialized) {
                 Instance = Room
                     .databaseBuilder(this@Context, DatabaseInitializer::class.java, "data.db")
-                    .addMigrations(
-                        From8To9Migration(),
-                        From10To11Migration(),
-                        From14To15Migration(),
-                        From22To23Migration()
-                    )
+                    .addMigrations(*migrations())
                     .build()
             }
         }
     }
 
+    // Room still generates the historical auto-migration from the exported schemas;
+    // the registered manual migration below takes precedence at runtime.
     @DeleteTable.Entries(DeleteTable(tableName = "QueuedMediaItem"))
     class From3To4Migration : AutoMigrationSpec
+
+    class PreserveQueueFrom3To4 : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Schema versions 4 and 5 did not declare a queue table. Keep a
+            // persistent side table across those transitions without decoding
+            // Parcel blobs, so unknown or corrupt formats are not discarded.
+            db.execSQL("ALTER TABLE `QueuedMediaItem` RENAME TO `_vimusic_queue_migration_backup`")
+        }
+    }
+
+    class RestoreQueueFrom5To6 : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS `QueuedMediaItem` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mediaItem` BLOB NOT NULL, `position` INTEGER)")
+            db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_vimusic_queue_migration_backup'").use { cursor ->
+                if (cursor.moveToFirst()) {
+                    // No conflict-ignore: on any unexpected conflict the whole
+                    // Room migration transaction fails instead of losing data.
+                    db.execSQL("INSERT INTO `QueuedMediaItem` (`id`, `mediaItem`, `position`) SELECT `id`, `mediaItem`, `position` FROM `_vimusic_queue_migration_backup`")
+                    db.execSQL("DROP TABLE `_vimusic_queue_migration_backup`")
+                }
+            }
+        }
+    }
 
     @RenameColumn.Entries(RenameColumn("Song", "albumInfoId", "albumId"))
     class From7To8Migration : AutoMigrationSpec
@@ -641,6 +686,7 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
 
 @TypeConverters
 object Converters {
+    @JvmStatic
     @TypeConverter
     fun mediaItemFromByteArray(value: ByteArray?): MediaItem? {
         return value?.let { byteArray ->
@@ -656,6 +702,7 @@ object Converters {
         }
     }
 
+    @JvmStatic
     @TypeConverter
     fun mediaItemToByteArray(mediaItem: MediaItem?): ByteArray? {
         return mediaItem?.toBundle()?.let { persistableBundle ->

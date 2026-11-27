@@ -33,7 +33,7 @@ inline fun ItemContainer(
                 .width(thumbnailSizeDp)
         ) {
             content(
-                centeredModifier = Modifier
+                Modifier
                     .align(Alignment.CenterHorizontally)
             )
         }
@@ -46,7 +46,7 @@ inline fun ItemContainer(
                 .fillMaxWidth()
         ) {
             content(
-                centeredModifier = Modifier
+                Modifier
                     .align(Alignment.CenterVertically)
             )
         }

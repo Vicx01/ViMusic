@@ -1,0 +1,3 @@
+<resources>
+    <string name="saved_queue_restore_failed">The saved queue could not be restored. It has been kept on this device.</string>
+</resources>

@@ -1,21 +1,288 @@
-name: CI
+name: Android CI
 
 on: push
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
-      - name: set up JDK 11
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
         with:
-          java-version: "11"
-          distribution: "temurin"
+          java-version: "21"
+          distribution: temurin
           cache: gradle
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v2
+      - name: Ensure Android compile SDK 37
+        run: .github/scripts/install-compile-sdk.sh
+      - name: Install verified Gradle 9.3.1
+        run: .github/scripts/install-gradle-ci.sh
+      - name: Share verified Gradle distribution with emulator job
+        uses: actions/upload-artifact@v4
         with:
-          name: app-debug.apk
+          name: gradle-9.3.1-ci
+          path: ${{ runner.temp }}/gradle-9.3.1-bin.zip
+          retention-days: 1
+          if-no-files-found: error
+      - name: Build debug APK
+        run: .github/scripts/gradle-ci.sh :app:assembleDebug
+      - name: Build minified release APK
+        run: .github/scripts/gradle-ci.sh :app:assembleRelease
+      - name: Verify packaged minimum Android version
+        shell: bash
+        run: |
+          set -euo pipefail
+          aapt=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -x "$aapt"
+          "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/vimusic-apk-badging.txt"
+          if ! grep -Fx "sdkVersion:'26'" "$RUNNER_TEMP/vimusic-apk-badging.txt" >/dev/null; then
+            echo '::error::Debug APK must require Android API 26.'
+            exit 1
+          fi
+          echo '::notice title=Minimum Android version::Debug APK requires API 26.'
+      - name: Record debug APK SHA-256
+        run: echo "::notice title=Debug APK SHA-256::$(sha256sum app/build/outputs/apk/debug/app-debug.apk | cut -d' ' -f1)"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Run JVM tests and compile instrumentation APK
+        run: .github/scripts/gradle-ci.sh :ktor-client-brotli:test :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest
+      - name: Capture production dependency baseline
+        run: python3 .github/scripts/production-dependency-baseline.py
+      - name: Upload production dependency baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-production-dependency-baseline
+          path: build/reports/production-dependencies/
+          if-no-files-found: error
+      - name: Verify InnerTubeX app adapter unit tests
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*innertubex*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          required = {'constructionAndCleanupRequireNoNetwork', 'preservesStreamFieldsButRedactsDiagnosticString', 'explicitlyFlagsBothBoundedAndChunkedStreams', 'cacheExpiresAndDoesNotCrossSessionGenerations',  'unknownExpiryAndInvalidationDoNotReuseUrls', 'publishedAndroidVrRequestKeepsIdentityBodyHostAndKeyHandling', 'cacheBoundsRetainedStreamCredentials'}
+          executed = {case.get('name') for case in cases if case.find('skipped') is None}
+          failed = {case.get('name') for case in cases if case.find('failure') is not None or case.find('error') is not None}
+          if required - executed or failed:
+              raise SystemExit(f'Missing: {sorted(required - executed)}; failed: {sorted(failed)}')
+          print(f'::notice title=InnerTubeX app adapter tests::Executed {len(executed)} cases with no failures.')
+          PYTEST
+      - name: Verify resolver JVM tests
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path("innertube/build/test-results/test").glob("TEST-*.xml"))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter("testcase")]
+          required = {"eachRequestPhasePreservesKtorCauseAndReportsOnlySafeMetadata", "unknownBodiesAndUntrustedFieldsAreNotExposed", "networkIoFailureIsNotSwallowedOrReclassified", "productionPlayerRequestHasAuditedIdentityBodyAndHeaders", "searchStillUsesWebRemixAndTheSharedMusicHost"}
+          executed = {case.get("name") for case in cases if case.find("skipped") is None}
+          failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
+          missing = required - executed
+          print(f"::notice title=Resolver JVM tests::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
+          if missing or failed:
+              raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
+          PY
+      - name: Verify Brotli response regression test
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('ktor-client-brotli/build/test-results/test').glob('TEST-*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          selected = [case for case in cases if case.get('name') == 'brotliResponseIsDecodedAndAdvertised']
+          if len(selected) != 1 or any(selected[0].find(tag) is not None for tag in ('failure', 'error', 'skipped')):
+              raise SystemExit('Brotli response regression did not execute successfully')
+          print('::notice title=Brotli regression::Offline compressed response fixture passed.')
+          PYTEST
+      - name: Verify lyrics serialization regression test
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('kugou/build/test-results/test').glob('TEST-*.xml'))
+          cases = [case for path in reports for case in ET.parse(path).getroot().iter('testcase')]
+          selected = [case for case in cases if case.get('name') == 'lyricsProviderModelsDeserializeWithUnknownFields']
+          if len(selected) != 1 or any(selected[0].find(tag) is not None for tag in ('failure', 'error', 'skipped')):
+              raise SystemExit('Lyrics serialization regression test did not execute successfully')
+          print('::notice title=Lyrics serialization regression::Offline model fixture passed.')
+          PY
+      - name: Upload instrumentation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-android-test-apk
+          path: app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: error
+
+  instrumentation:
+    runs-on: ubuntu-24.04
+    needs: build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 29]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: gradle
+      - name: Ensure Android compile SDK 37
+        run: .github/scripts/install-compile-sdk.sh
+      - name: Download verified Gradle distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: gradle-9.3.1-ci
+          path: ${{ runner.temp }}
+      - name: Verify and unpack Gradle distribution
+        run: |
+          echo "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06  $RUNNER_TEMP/gradle-9.3.1-bin.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle-9.3.1-bin.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-9.3.1/bin/gradle" >> "$GITHUB_ENV"
+      - name: Download debug APK from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: vimusic-debug-apk
+          path: app/build/outputs/apk/debug
+      - name: Set up JDK 17 for Android command-line tools
+        uses: actions/setup-java@v5
+        with:
+          java-version: "17"
+          distribution: temurin
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run playback instrumentation tests
+        env:
+          VIMUSIC_EMULATOR_API: ${{ matrix.api }}
+        run: |
+          set +e
+          export VIMUSIC_GRADLE_JAVA_HOME="$JAVA_HOME_21_X64"
+          .github/scripts/run-emulator-tests.sh > "$RUNNER_TEMP/emulator-tests.log" 2>&1
+          result=$?
+          tail -n 120 "$RUNNER_TEMP/emulator-tests.log"
+          if [ "$result" -ne 0 ]; then
+            python3 - "$RUNNER_TEMP/emulator-tests.log" <<'PY'
+          import pathlib, re, sys, xml.etree.ElementTree as ET
+          for report in pathlib.Path("app/build/outputs/androidTest-results").rglob("TEST-*.xml"):
+              for case in ET.parse(report).getroot().iter("testcase"):
+                  if case.get("classname", "").endswith("DatabaseMigrationTest"):
+                      failure = case.find("failure")
+                      if failure is None:
+                          failure = case.find("error")
+                      if failure is not None:
+                          text = (failure.get("message") or failure.text or "")[:8000]
+                          text = re.sub(r'https?://\S+', '[redacted-url]', text)
+                          text = '\n'.join('[redacted sensitive line]' if re.search(r'cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.I) else line for line in text.splitlines())
+                          print("::error title=Historical database migration test::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+          lines = pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
+          excerpt = "\n".join(lines[-80:])
+          for report in pathlib.Path("app/build/outputs/androidTest-results").rglob("*.xml"):
+              excerpt += "\n" + report.read_text(errors="replace")[-12000:]
+          text = excerpt[-3000:]
+          print("::error title=Emulator validation failed::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+          PY
+          fi
+          exit "$result"
+      - name: Verify instrumentation test report
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path("app/build/outputs/androidTest-results/connected").rglob("TEST-*.xml"))
+          cases = []
+          for path in reports:
+              cases.extend(ET.parse(path).getroot().iter("testcase"))
+          required = {
+              "modernMetadataDoesNotReplaceExistingLegacyCacheMetadata",
+              "modernDiagnosticsRedactUntrustedFailureFields",
+              "botGuardProviderMapsTokensAndReleasesMinter",
+              "botGuardFailureReachesConnectedLegacyFallbackAndCancellationEscapes",
+              "connectedModernPlayerPassesThirtySecondsSeeksAndCompletes",
+              "providerSelectionUsesOnlySelectedFactory",
+              "tokenFailureFallsBackToLegacyWithoutHidingFailure",
+              "stream403And416RefreshAndPreserveSeekRange",
+              "rejectedInitialStreamCanFallBackButChangedFormatCannotBeMixed",
+              "cancellationDoesNotFallBackOrRetry",
+              "modernBridgePreservesRangeHeadersAndCacheExpiry",
+              "modernBridgeFallbackIsVisibleAndUnsafeStreamsAreRejected",
+              "modernBridgeRespectsAudioCacheAndCancellation",
+              "resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit",
+              "errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls",
+              "resolverHttpErrorIsSanitizedAndNotRetried",
+              "loaderWrapsNonIoAndForwardsResolverIo",
+              "httpRangesAndResponseHeadersFollowTheRequestedDataSpec",
+              "continuousPlaybackPassesFirst512KiBAndThirtySeconds",
+              "queuedMediaItemPersistsThroughExistingConvertersAfterReopen",
+              "mediaItemConvertersHandleNullAndRoundTrip",
+              "deferredDaoResolvesOnlyOnUseAndKeepsDaoBehavior",
+              "everyHistoricalAdjacentMigrationPreservesFixtures",
+              "everyHistoricalSchemaMigratesToCurrentWithFixtures",
+              "roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs",
+              "unreadableQueueCannotBeOverwritten",
+              "queueReplacementRollsBackOnInsertFailure",
+              "enablingPersistenceOnlyPermitsEmptyOrRestoredQueue",
+          }
+          executed = {case.get("name") for case in cases if case.find("skipped") is None}
+          failed = [case.get("name") for case in cases if case.find("failure") is not None or case.find("error") is not None]
+          missing = required - executed
+          print(f"::notice title=Playback and database instrumentation results::Executed {len(executed)} distinct tests; failures {len(failed)}; missing {len(missing)}.")
+          if missing or failed:
+              raise SystemExit(f"Missing: {sorted(missing)}; failed: {failed}")
+          PY
+      - name: Upload Android test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimusic-android-test-results-api${{ matrix.api }}
+          path: app/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore
+
+  probe:
+    runs-on: ubuntu-24.04
+    needs: build
+    if: contains(github.event.head_commit.message, '[player-probe]')
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: gradle
+      - name: Ensure Android compile SDK 37
+        run: .github/scripts/install-compile-sdk.sh
+      - name: Download verified Gradle distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: gradle-9.3.1-ci
+          path: ${{ runner.temp }}
+      - name: Verify and unpack Gradle distribution
+        run: |
+          echo "b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06  $RUNNER_TEMP/gradle-9.3.1-bin.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle-9.3.1-bin.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_EXECUTABLE=$RUNNER_TEMP/gradle-9.3.1/bin/gradle" >> "$GITHUB_ENV"
+      - name: Probe one public fixture with controlled request profiles
+        env:
+          VIMUSIC_LIVE_PLAYER_PROBE: "1"
+        run: .github/scripts/gradle-ci.sh :innertube:test --tests '*LivePlayerProbeTest.controlledPlayerRequests'
+      - name: Publish sanitized results
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('innertube/build/test-results/test').glob('*LivePlayerProbeTest*.xml'))
+          if len(reports) != 1:
+              raise SystemExit('Live probe report missing')
+          root = ET.parse(reports[0]).getroot()
+          lines = (root.findtext('system-out') or '').splitlines()
+          cases = [line for line in lines if re.fullmatch(r'PROBE\|[a-z_]+\|http=(?:[0-9]{3}|none)\|[A-Za-z0-9_=, |()-]+', line)]
+          if len(cases) != 13:
+              raise SystemExit('Expected thirteen sanitized probe result lines')
+          # GitHub limits individual notice annotations; emit the whole safe table once.
+          summary = '\n'.join(cases).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=InnerTube probe::' + summary)
+          PY

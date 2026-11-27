@@ -1,5 +1,6 @@
 package it.vfsfitvnm.innertube.requests
 
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.post
@@ -13,11 +14,15 @@ import it.vfsfitvnm.innertube.models.bodies.PlayerBody
 import it.vfsfitvnm.innertube.utils.runCatchingNonCancellable
 import kotlinx.serialization.Serializable
 
-suspend fun Innertube.player(body: PlayerBody) = runCatchingNonCancellable {
-    val response = client.post(player) {
-        setBody(body)
-        mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
-    }.body<PlayerResponse>()
+suspend fun Innertube.player(body: PlayerBody) = player(client, body)
+
+internal suspend fun Innertube.player(httpClient: HttpClient, body: PlayerBody) = runCatchingNonCancellable {
+    val response = playerHttpRequest(PlayerRequestStage.ANDROID_PLAYER) {
+        httpClient.post(player) {
+            setBody(body)
+            mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
+        }.body<PlayerResponse>()
+    }
 
     if (response.playabilityStatus?.status == "OK") {
         response
@@ -33,26 +38,30 @@ suspend fun Innertube.player(body: PlayerBody) = runCatchingNonCancellable {
             val audioStreams: List<AudioStream>
         )
 
-        val safePlayerResponse = client.post(player) {
-            setBody(
-                body.copy(
-                    context = Context.DefaultAgeRestrictionBypass.copy(
-                        thirdParty = Context.ThirdParty(
-                            embedUrl = "https://www.youtube.com/watch?v=${body.videoId}"
-                        )
-                    ),
+        val safePlayerResponse = playerHttpRequest(PlayerRequestStage.EMBEDDED_PLAYER) {
+            httpClient.post(player) {
+                setBody(
+                    body.copy(
+                        context = Context.DefaultAgeRestrictionBypass.copy(
+                            thirdParty = Context.ThirdParty(
+                                embedUrl = "https://www.youtube.com/watch?v=${body.videoId}"
+                            )
+                        ),
+                    )
                 )
-            )
-            mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
-        }.body<PlayerResponse>()
+                mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
+            }.body<PlayerResponse>()
+        }
 
         if (safePlayerResponse.playabilityStatus?.status != "OK") {
             return@runCatchingNonCancellable response
         }
 
-        val audioStreams = client.get("https://watchapi.whatever.social/streams/${body.videoId}") {
-            contentType(ContentType.Application.Json)
-        }.body<PipedResponse>().audioStreams
+        val audioStreams = playerHttpRequest(PlayerRequestStage.PIPED_STREAMS) {
+            httpClient.get("https://watchapi.whatever.social/streams/${body.videoId}") {
+                contentType(ContentType.Application.Json)
+            }.body<PipedResponse>().audioStreams
+        }
 
         safePlayerResponse.copy(
             streamingData = safePlayerResponse.streamingData?.copy(

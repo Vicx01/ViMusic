@@ -9,4 +9,7 @@ sourceSets.all {
 dependencies {
     implementation(libs.ktor.client.encoding)
     implementation(libs.brotli)
+
+    testImplementation(testLibs.junit)
+    testImplementation(libs.ktor.client.mock)
 }

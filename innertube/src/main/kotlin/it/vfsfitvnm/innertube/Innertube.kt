@@ -1,6 +1,7 @@
 package it.vfsfitvnm.innertube
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.BrowserUserAgent
 import io.ktor.client.plugins.compression.ContentEncoding
@@ -18,33 +19,36 @@ import it.vfsfitvnm.innertube.models.Thumbnail
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 
-object Innertube {
-    val client = HttpClient(OkHttp) {
-        BrowserUserAgent()
+/** Shared unchanged defaults, also used by request-construction tests. */
+internal fun HttpClientConfig<*>.configureInnertubeClient() {
+    BrowserUserAgent()
 
-        expectSuccess = true
+    expectSuccess = true
 
-        install(ContentNegotiation) {
-            @OptIn(ExperimentalSerializationApi::class)
-            json(Json {
-                ignoreUnknownKeys = true
-                explicitNulls = false
-                encodeDefaults = true
-            })
-        }
+    install(ContentNegotiation) {
+        @OptIn(ExperimentalSerializationApi::class)
+        json(Json {
+            ignoreUnknownKeys = true
+            explicitNulls = false
+            encodeDefaults = true
+        })
+    }
 
-        install(ContentEncoding) {
-            brotli()
-        }
+    install(ContentEncoding) {
+        brotli()
+    }
 
-        defaultRequest {
-            url(scheme = "https", host ="music.youtube.com") {
-                headers.append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                headers.append("X-Goog-Api-Key", "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8")
-                parameters.append("prettyPrint", "false")
-            }
+    defaultRequest {
+        url(scheme = "https", host ="music.youtube.com") {
+            headers.append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            headers.append("X-Goog-Api-Key", "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8")
+            parameters.append("prettyPrint", "false")
         }
     }
+}
+
+object Innertube {
+    val client = HttpClient(OkHttp) { configureInnertubeClient() }
 
     internal const val browse = "/youtubei/v1/browse"
     internal const val next = "/youtubei/v1/next"

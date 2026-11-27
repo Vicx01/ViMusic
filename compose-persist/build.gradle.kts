@@ -1,6 +1,6 @@
 plugins {
     id("com.android.library")
-    kotlin("android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -9,18 +9,19 @@ android {
 
     defaultConfig {
         minSdk = 21
-        targetSdk = 33
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            // The app shrinks the complete dependency graph. Shrinking this
+            // library independently removes classes referenced by the app.
+            isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
 
     sourceSets.all {
-        kotlin.srcDir("src/$name/kotlin")
+        kotlin.directories.add("src/$name/kotlin")
     }
 
     buildFeatures {
@@ -32,15 +33,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
-    }
-
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
 }
 
 dependencies {
     implementation(libs.compose.foundation)
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    }
 }

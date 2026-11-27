@@ -20,4 +20,5 @@ dependencies {
     implementation(libs.ktor.serialization.json)
 
     testImplementation(testLibs.junit)
+    testImplementation(libs.ktor.client.mock)
 }

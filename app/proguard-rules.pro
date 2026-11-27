@@ -32,3 +32,8 @@
 -dontwarn org.openjsse.javax.net.ssl.SSLSocket
 -dontwarn org.openjsse.net.ssl.OpenJSSE
 -dontwarn org.slf4j.impl.StaticLoggerBinder
+
+# The BotGuard HTML invokes these methods by their literal JavaScript names.
+-keepclassmembers class it.vfsfitvnm.vimusic.service.innertubex.potoken.PoTokenWebView {
+    @android.webkit.JavascriptInterface <methods>;
+}

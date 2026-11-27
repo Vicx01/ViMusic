@@ -24,9 +24,11 @@ import android.media.audiofx.AudioEffect
 import android.media.audiofx.LoudnessEnhancer
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
-import android.net.Uri
 import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import android.text.format.DateUtils
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -71,19 +73,25 @@ import it.vfsfitvnm.innertube.Innertube
 import it.vfsfitvnm.innertube.models.NavigationEndpoint
 import it.vfsfitvnm.innertube.models.bodies.PlayerBody
 import it.vfsfitvnm.innertube.requests.player
+import it.vfsfitvnm.vimusic.BuildConfig
 import it.vfsfitvnm.vimusic.Database
+import it.vfsfitvnm.vimusic.DatabaseInitializer
 import it.vfsfitvnm.vimusic.MainActivity
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.enums.ExoPlayerDiskCacheMaxSize
 import it.vfsfitvnm.vimusic.models.Event
 import it.vfsfitvnm.vimusic.models.QueuedMediaItem
 import it.vfsfitvnm.vimusic.query
+import it.vfsfitvnm.vimusic.service.innertubex.ModernDataSpecResolver
+import it.vfsfitvnm.vimusic.service.innertubex.ModernPlayback
+import it.vfsfitvnm.vimusic.service.innertubex.safeModernFailure
+import it.vfsfitvnm.vimusic.service.innertubex.safeStreamClient
 import it.vfsfitvnm.vimusic.utils.InvincibleService
-import it.vfsfitvnm.vimusic.utils.RingBuffer
 import it.vfsfitvnm.vimusic.utils.TimerJob
 import it.vfsfitvnm.vimusic.utils.YouTubeRadio
 import it.vfsfitvnm.vimusic.utils.activityPendingIntent
 import it.vfsfitvnm.vimusic.utils.broadCastPendingIntent
+import it.vfsfitvnm.vimusic.utils.experimentalInnerTubeXKey
 import it.vfsfitvnm.vimusic.utils.exoPlayerDiskCacheMaxSizeKey
 import it.vfsfitvnm.vimusic.utils.findNextMediaItemById
 import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
@@ -124,6 +132,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
     private lateinit var mediaSession: MediaSession
     private lateinit var cache: SimpleCache
     private lateinit var player: ExoPlayer
+    private var modernPlayback: ModernPlayback? = null
 
     private val stateBuilder = PlaybackState.Builder()
         .setActions(
@@ -152,6 +161,8 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     private var volumeNormalizationJob: Job? = null
 
+    // Do not overwrite persisted rows unless their restore has fully succeeded.
+    private val persistentQueueStore by lazy { PersistentQueueStore(DatabaseInitializer.Instance) }
     private var isPersistentQueueEnabled = false
     private var isShowingThumbnailInLockscreen = true
     override var isInvincibilityEnabled = false
@@ -177,6 +188,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     override fun onCreate() {
         super.onCreate()
+        installPlaybackMedia3Log()
 
         bitmapProvider = BitmapProvider(
             bitmapSize = (256 * resources.displayMetrics.density).roundToInt(),
@@ -279,6 +291,14 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         player.removeListener(this)
         player.stop()
         player.release()
+        modernPlayback?.let { modern ->
+            modernPlayback = null
+            CoroutineScope(Dispatchers.IO).launch {
+                try { modern.close() } catch (_: Exception) {
+                    Log.w("ViMusicPlayback", "Modern provider cleanup failed")
+                }
+            }
+        }
 
         unregisterReceiver(notificationActionReceiver)
 
@@ -331,6 +351,10 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 }
             }
         }
+    }
+
+    override fun onPlayerError(error: PlaybackException) {
+        if (BuildConfig.DEBUG) Log.e("PlaybackError", playbackErrorDetails(error))
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -420,8 +444,9 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             )
         }.let { queuedMediaItems ->
             query {
-                Database.clearQueue()
-                Database.insert(queuedMediaItems)
+                if (!persistentQueueStore.replaceIfRestored(queuedMediaItems)) {
+                    Log.e("PersistentQueue", "Queue was not restored; refusing to overwrite saved queue")
+                }
             }
         }
     }
@@ -430,10 +455,18 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         if (!isPersistentQueueEnabled) return
 
         query {
-            val queuedSong = Database.queue()
-            Database.clearQueue()
-
-            if (queuedSong.isEmpty()) return@query
+            // An unreadable item must not prevent the rest of the app starting,
+            // and must never be cleared or replaced on shutdown.
+            val queuedSong = try {
+                persistentQueueStore.read()
+            } catch (failure: RuntimeException) {
+                reportQueueRestoreFailure(failure)
+                return@query
+            }
+            if (queuedSong.isEmpty()) {
+                persistentQueueStore.markRestored()
+                return@query
+            }
 
             val index = queuedSong.indexOfFirst { it.position != null }.coerceAtLeast(0)
 
@@ -456,6 +489,15 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 startForegroundService(this@PlayerService, intent<PlayerService>())
                 startForeground(NotificationId, notification())
             }
+            persistentQueueStore.markRestored()
+        }
+    }
+
+    private fun reportQueueRestoreFailure(failure: RuntimeException) {
+        // Do not log stored blobs or exception messages that may contain user data.
+        Log.e("PersistentQueue", "Saved queue could not be restored (${failure.javaClass.simpleName}); it was preserved")
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(this, R.string.saved_queue_restore_failed, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -619,10 +661,32 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         }
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String) {
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String?) {
+        // Android may send a null key when all preferences are cleared.
+        if (key == null) {
+            listOf(
+                persistentQueueKey, volumeNormalizationKey, resumePlaybackWhenDeviceConnectedKey,
+                isInvincibilityEnabledKey, skipSilenceKey, isShowingThumbnailInLockscreenKey,
+                trackLoopEnabledKey,
+            ).forEach { onSharedPreferenceChanged(sharedPreferences, it) }
+            return
+        }
         when (key) {
-            persistentQueueKey -> isPersistentQueueEnabled =
-                sharedPreferences.getBoolean(key, isPersistentQueueEnabled)
+            persistentQueueKey -> {
+                val wasEnabled = isPersistentQueueEnabled
+                isPersistentQueueEnabled = sharedPreferences.getBoolean(key, isPersistentQueueEnabled)
+                if (!wasEnabled && isPersistentQueueEnabled) {
+                    query {
+                        try {
+                            if (!persistentQueueStore.allowSavingIfEmpty()) {
+                                Log.w("PersistentQueue", "Existing saved queue retained; restart to restore it")
+                            }
+                        } catch (failure: RuntimeException) {
+                            reportQueueRestoreFailure(failure)
+                        }
+                    }
+                }
+            }
 
             volumeNormalizationKey -> maybeNormalizeVolume()
 
@@ -744,95 +808,111 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                     .setConnectTimeoutMs(16000)
                     .setReadTimeoutMs(8000)
                     .setUserAgent("Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0")
+                    .setTransferListener(if (BuildConfig.DEBUG) PlaybackNetworkDiagnostics else null)
             )
         }
     }
 
     private fun createDataSourceFactory(): DataSource.Factory {
         val chunkLength = 512 * 1024L
-        val ringBuffer = RingBuffer<Pair<String, Uri>?>(2) { null }
-
-        return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
-            val videoId = dataSpec.key ?: error("A key must be set")
-
-            if (cache.isCached(videoId, dataSpec.position, chunkLength)) {
-                dataSpec
-            } else {
-                when (videoId) {
-                    ringBuffer.getOrNull(0)?.first -> dataSpec.withUri(ringBuffer.getOrNull(0)!!.second)
-                    ringBuffer.getOrNull(1)?.first -> dataSpec.withUri(ringBuffer.getOrNull(1)!!.second)
-                    else -> {
-                        val urlResult = runBlocking(Dispatchers.IO) {
-                            Innertube.player(PlayerBody(videoId = videoId))
-                        }?.mapCatching { body ->
-                            if (body.videoDetails?.videoId != videoId) {
-                                throw VideoIdMismatchException()
-                            }
-
-                            when (val status = body.playabilityStatus?.status) {
-                                "OK" -> body.streamingData?.highestQualityFormat?.let { format ->
-                                    val mediaItem = runBlocking(Dispatchers.Main) {
-                                        player.findNextMediaItemById(videoId)
-                                    }
-
-                                    if (mediaItem?.mediaMetadata?.extras?.getString("durationText") == null) {
-                                        format.approxDurationMs?.div(1000)
-                                            ?.let(DateUtils::formatElapsedTime)?.removePrefix("0")
-                                            ?.let { durationText ->
-                                                mediaItem?.mediaMetadata?.extras?.putString(
-                                                    "durationText",
-                                                    durationText
-                                                )
-                                                Database.updateDurationText(videoId, durationText)
-                                            }
-                                    }
-
-                                    query {
-                                        mediaItem?.let(Database::insert)
-
-                                        Database.insert(
-                                            it.vfsfitvnm.vimusic.models.Format(
-                                                songId = videoId,
-                                                itag = format.itag,
-                                                mimeType = format.mimeType,
-                                                bitrate = format.bitrate,
-                                                loudnessDb = body.playerConfig?.audioConfig?.normalizedLoudnessDb,
-                                                contentLength = format.contentLength,
-                                                lastModified = format.lastModified
-                                            )
-                                        )
-                                    }
-
-                                    format.url
-                                } ?: throw PlayableFormatNotFoundException()
-
-                                "UNPLAYABLE" -> throw UnplayableException()
-                                "LOGIN_REQUIRED" -> throw LoginRequiredException()
-                                else -> throw PlaybackException(
-                                    status,
-                                    null,
-                                    PlaybackException.ERROR_CODE_REMOTE_ERROR
-                                )
-                            }
+        val legacyResolver = PlaybackDataSpecResolver(
+                isCached = { videoId, position -> cache.isCached(videoId, position, chunkLength) },
+                resolveUri = { videoId ->
+                    val urlResult = runBlocking(Dispatchers.IO) {
+                        Innertube.player(PlayerBody(videoId = videoId))
+                    }?.mapCatching { body ->
+                        if (body.videoDetails?.videoId != videoId) {
+                            throw VideoIdMismatchException()
                         }
 
-                        urlResult?.getOrThrow()?.let { url ->
-                            ringBuffer.append(videoId to url.toUri())
-                            dataSpec.withUri(url.toUri())
-                                .subrange(dataSpec.uriPositionOffset, chunkLength)
-                        } ?: throw PlaybackException(
-                            null,
-                            urlResult?.exceptionOrNull(),
-                            PlaybackException.ERROR_CODE_REMOTE_ERROR
-                        )
+                        when (val status = body.playabilityStatus?.status) {
+                            "OK" -> body.streamingData?.highestQualityFormat?.let { format ->
+                                val mediaItem = runBlocking(Dispatchers.Main) {
+                                    player.findNextMediaItemById(videoId)
+                                }
+
+                                if (mediaItem?.mediaMetadata?.extras?.getString("durationText") == null) {
+                                    format.approxDurationMs?.div(1000)
+                                        ?.let(DateUtils::formatElapsedTime)?.removePrefix("0")
+                                        ?.let { durationText ->
+                                            mediaItem?.mediaMetadata?.extras?.putString(
+                                                "durationText",
+                                                durationText
+                                            )
+                                            Database.updateDurationText(videoId, durationText)
+                                        }
+                                }
+
+                                query {
+                                    mediaItem?.let(Database::insert)
+
+                                    Database.insert(
+                                        it.vfsfitvnm.vimusic.models.Format(
+                                            songId = videoId,
+                                            itag = format.itag,
+                                            mimeType = format.mimeType,
+                                            bitrate = format.bitrate,
+                                            loudnessDb = body.playerConfig?.audioConfig?.normalizedLoudnessDb,
+                                            contentLength = format.contentLength,
+                                            lastModified = format.lastModified
+                                        )
+                                    )
+                                }
+
+                                format.url
+                            } ?: throw PlayableFormatNotFoundException()
+
+                            "UNPLAYABLE" -> throw UnplayableException()
+                            "LOGIN_REQUIRED" -> throw LoginRequiredException()
+                            else -> throw PlaybackException(
+                                status,
+                                null,
+                                PlaybackException.ERROR_CODE_REMOTE_ERROR
+                            )
+                        }
                     }
+
+                    urlResult?.getOrThrow()?.toUri() ?: throw PlaybackException(
+                        null,
+                        urlResult?.exceptionOrNull(),
+                        PlaybackException.ERROR_CODE_REMOTE_ERROR
+                    )
                 }
-            }
+            )
+        return selectPlaybackFactory(
+            modernEnabled = preferences.getBoolean(experimentalInnerTubeXKey, false),
+            legacy = { ResolvingDataSource.Factory(createCacheDataSource(), legacyResolver) },
+            modern = { createModernPlaybackFactory(legacyResolver) }
+        )
+    }
+
+    private fun createModernPlaybackFactory(legacyResolver: PlaybackDataSpecResolver): DataSource.Factory {
+        val modern = ModernPlayback(applicationContext).also { modernPlayback = it }
+        val resolver = ModernDataSpecResolver(
+            // Modern cache entries are keyed by video and itag, not the legacy key.
+            isCached = { _, _ -> false },
+            resolve = { videoId ->
+                val stream = runBlocking(Dispatchers.IO) { modern.resolve(videoId) }
+                Log.i("ViMusicPlayback", "InnerTubeX progressive stream resolved client=${safeStreamClient(stream.clientName)} itag=${stream.itag}")
+                val mediaItem = runBlocking(Dispatchers.Main) { player.findNextMediaItemById(videoId) }
+                // Format is shared with the legacy offline browser. Do not replace
+                // its metadata while the legacy representation still has cache bytes.
+                val legacyBytes = cache.getCachedBytes(videoId, 0, -1)
+                query { persistModernFormat(Database, mediaItem, stream, legacyBytes) }
+                stream
+            },
+            fallback = legacyResolver,
+            onModernFailure = { error -> Log.w("ViMusicPlayback", "InnerTubeX resolution failed ${safeModernFailure(error)}; trying legacy provider") }
+        )
+        return recoveringPlaybackFactory(createCacheDataSource(), resolver, legacyResolver) { videoId ->
+            legacyResolver.invalidate(videoId)
+            runBlocking(Dispatchers.IO) { modern.refreshAfterRejection() }
         }
     }
 
     private fun createMediaSourceFactory(): MediaSource.Factory {
         return DefaultMediaSourceFactory(createDataSourceFactory(), createExtractorsFactory())
+            .setLoadErrorHandlingPolicy(PlaybackLoadErrorHandlingPolicy())
     }
 
     private fun createExtractorsFactory(): ExtractorsFactory {

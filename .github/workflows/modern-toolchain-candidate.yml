@@ -1,0 +1,174 @@
+name: Historical modern toolchain candidate (a1003f5)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a1003f5daa03da8dde675b398d59a3efbb5b2501
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Create disposable copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vimusic-modern-candidate"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/vimusic-modern-candidate"
+          python3 .github/scripts/prepare-modern-toolchain.py
+      - name: Inspect Compose compile dependency selection
+        shell: bash
+        run: |
+          set +e
+          cd "$RUNNER_TEMP/vimusic-modern-candidate"
+          gradle --no-daemon --console=plain :app:dependencyInsight --dependency foundation-layout --configuration debugCompileClasspath > "$RUNNER_TEMP/modern-compose-insight.log" 2>&1
+          python3 - "$RUNNER_TEMP/modern-compose-insight.log" <<'PY'
+          import pathlib, re, sys
+          lines = pathlib.Path(sys.argv[1]).read_text(errors='replace').splitlines()
+          safe = [re.sub(r'https?://\S+', '[redacted-url]', line) for line in lines if not re.search(r'authorization|cookie|token|api[-_ ]?key|password|secret|credential|bearer', line, re.I)]
+          start = next((i for i, line in enumerate(safe) if line.startswith('androidx.compose.foundation:foundation-layout')), 0)
+          output = '\n'.join(safe[start:start + 60])[:8000].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=Compose compile dependency insight::' + output)
+          PY
+      - name: Build production app and run existing JVM tests
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          cd "$RUNNER_TEMP/vimusic-modern-candidate"
+          # Maven can throttle hosted runners. Retry only this explicit infrastructure
+          # failure, never compiler or test errors, and keep attempts bounded.
+          result=1
+          for attempt in 1 2 3; do
+            gradle --no-daemon --console=plain :app:assembleDebug :innertube:test :kugou:test :app:testDebugUnitTest :app:assembleDebugAndroidTest > "$RUNNER_TEMP/modern-candidate.log" 2>&1
+            result=$?
+            if [ "$result" -eq 0 ] || ! grep -q '429.*Too Many Requests' "$RUNNER_TEMP/modern-candidate.log"; then break; fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Maven HTTP 429; retrying hosted candidate build (attempt $attempt of 3)."
+              sleep $((attempt * 30))
+            fi
+          done
+          python3 - "$RUNNER_TEMP/modern-candidate.log" "$result" <<'PY'
+          import pathlib, re, sys
+          lines = pathlib.Path(sys.argv[1]).read_text(errors='replace').splitlines()
+          safe = []
+          for line in lines:
+              if re.search(r'authorization|cookie|sapisid|po[-_ ]?token|api[-_ ]?key|password|secret|credential|bearer', line, re.I):
+                  continue
+              line = re.sub(r'https?://\S+', '[redacted-url]', line)
+              if re.match(r'\s*(?:e: |error: )', line, re.I) or ': error:' in line:
+                  safe.append(line)
+          start = next((i for i, line in enumerate(lines) if '* What went wrong:' in line), None)
+          if start is not None:
+              for line in lines[start:start + 35]:
+                  if not re.search(r'authorization|cookie|sapisid|po[-_ ]?token|api[-_ ]?key|password|secret|credential|bearer', line, re.I):
+                      safe.append(re.sub(r'https?://\S+', '[redacted-url]', line))
+          safe.append('gradle_exit=' + sys.argv[2])
+          output = '\n'.join(safe)[:8500].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::notice title=Modern toolchain candidate::' + output)
+          PY
+          exit "$result"
+      - name: Upload candidate debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-candidate-debug-apk
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  instrumentation:
+    runs-on: ubuntu-24.04
+    needs: build
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 29]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a1003f5daa03da8dde675b398d59a3efbb5b2501
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Create disposable copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vimusic-modern-candidate"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='*/build' -cf - . | tar -xf - -C "$RUNNER_TEMP/vimusic-modern-candidate"
+          python3 .github/scripts/prepare-modern-toolchain.py
+      - name: Download candidate APK
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-candidate-debug-apk
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/apk/debug
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run API ${{ matrix.api }} instrumentation
+        shell: bash
+        env:
+          VIMUSIC_EMULATOR_API: ${{ matrix.api }}
+        working-directory: ${{ runner.temp }}/vimusic-modern-candidate
+        run: |
+          set -euo pipefail
+          export VIMUSIC_GRADLE_JAVA_HOME="$JAVA_HOME"
+          export GRADLE_EXECUTABLE="$(command -v gradle)"
+          timeout 1200 .github/scripts/run-emulator-tests.sh
+      - name: Verify required database and playback tests
+        working-directory: ${{ runner.temp }}/vimusic-modern-candidate
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('app/build/outputs/androidTest-results/connected').rglob('TEST-*.xml'))
+          cases = [case for report in reports for case in ET.parse(report).getroot().iter('testcase')]
+          required = {
+              'resolutionPreservesUnboundedAndBoundedRequestsOnMissAndRingHit',
+              'errorDetailsIncludeHttpStatusAndCauseWithoutSignedUrls',
+              'resolverHttpErrorIsSanitizedAndNotRetried',
+              'loaderWrapsNonIoAndForwardsResolverIo',
+              'httpRangesAndResponseHeadersFollowTheRequestedDataSpec',
+              'continuousPlaybackPassesFirst512KiBAndThirtySeconds',
+              'queuedMediaItemPersistsThroughExistingConvertersAfterReopen',
+              'mediaItemConvertersHandleNullAndRoundTrip',
+              'deferredDaoResolvesOnlyOnUseAndKeepsDaoBehavior',
+              'everyHistoricalAdjacentMigrationPreservesFixtures',
+              'everyHistoricalSchemaMigratesToCurrentWithFixtures',
+              'roomProductionMigrationRegistrationPreservesLegacyAndUnknownBlobs',
+              'unreadableQueueCannotBeOverwritten',
+              'queueReplacementRollsBackOnInsertFailure',
+              'enablingPersistenceOnlyPermitsEmptyOrRestoredQueue',
+          }
+          executed = {case.get('name') for case in cases if case.find('skipped') is None}
+          failed = [case.get('name') for case in cases if case.find('failure') is not None or case.find('error') is not None]
+          if required - executed or failed:
+              raise SystemExit(f'Missing: {sorted(required - executed)}; failed: {failed}')
+          print(f'::notice title=Modern candidate instrumentation::Executed {len(executed)} tests; no failures or missing cases.')
+          PY
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-candidate-test-results-api${{ matrix.api }}
+          path: ${{ runner.temp }}/vimusic-modern-candidate/app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
