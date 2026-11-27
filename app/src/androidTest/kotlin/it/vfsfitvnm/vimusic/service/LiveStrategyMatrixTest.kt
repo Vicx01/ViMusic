@@ -44,8 +44,8 @@ class LiveStrategyMatrixTest {
 
     @Test(timeout = 900_000) fun publicStrategyMatrix() = runBlocking {
         enabled()
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val source = WebBotGuardTokenProvider(context)
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val source = WebBotGuardTokenProvider(appContext)
         var minted: PoTokenResult? = null
         val tokens = object : TokenProvider {
             override val capabilities = source.capabilities
@@ -118,8 +118,8 @@ class LiveStrategyMatrixTest {
 
     @Test(timeout = 120_000) fun realBotGuardAndPlayerAttachment() = runBlocking {
         enabled()
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val tokens = WebBotGuardTokenProvider(context)
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val tokens = WebBotGuardTokenProvider(appContext)
         var expected: String? = null
         var attached = false
         val client = HttpClient(OkHttp) {
