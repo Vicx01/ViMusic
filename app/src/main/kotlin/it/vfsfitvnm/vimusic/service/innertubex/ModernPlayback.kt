@@ -21,6 +21,7 @@ internal class ModernPlayback(context: Context) {
                     request.url.host, request.url.encodedPath, response.status.value,
                     request.headers.contains("X-Goog-Api-Key"), request.url.parameters.contains("key"),
                     request.headers["X-YouTube-Client-Name"], request.headers["X-YouTube-Client-Version"],
+                    request.headers.contains("X-Goog-Visitor-Id"),
                 )
                 Log.i("ViMusicPlayback", "STREAM_HTTP $details")
             }
@@ -37,7 +38,15 @@ internal class ModernPlayback(context: Context) {
     private val tokens = WebBotGuardTokenProvider(context)
     private val adapter = PlaybackAdapter(client, tokens)
 
-    suspend fun resolve(videoId: String) = adapter.resolve(videoId)
+    suspend fun resolve(videoId: String): StreamSnapshot = adapter.resolve(videoId).also { stream ->
+        val ttl = stream.expiresAtMs?.let { ((it - System.currentTimeMillis()) / 1000).coerceIn(-1, 86400) } ?: -1
+        val format = when {
+            stream.mimeType?.startsWith("audio/webm") == true -> "webm"
+            stream.mimeType?.startsWith("audio/mp4") == true -> "mp4"
+            else -> "other"
+        }
+        Log.i("ViMusicPlayback", "STREAM_SELECTED client=${safeStreamClient(stream.clientName)} itag=${stream.itag.coerceIn(0, 10000)} format=$format expirySeconds=$ttl")
+    }
     suspend fun refreshAfterRejection() {
         tokens.invalidateAttestation()
         adapter.refreshAfterStreamRejection()

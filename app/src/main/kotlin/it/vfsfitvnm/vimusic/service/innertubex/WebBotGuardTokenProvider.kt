@@ -27,16 +27,24 @@ internal class WebBotGuardTokenProvider(private val generator: BotGuardMinter) :
     )
 
     override suspend fun getPoToken(videoId: String, visitorData: String, cookie: String?): PoTokenResult? {
-        if (visitorData.isBlank()) return null
+        if (visitorData.isBlank()) {
+            Log.i("ViMusicPlayback", "BOTGUARD stage=visitor result=missing")
+            return null
+        }
+        Log.i("ViMusicPlayback", "BOTGUARD stage=mint result=started")
         return try {
-            generator.mint(videoId, visitorData)?.let {
+            val minted = generator.mint(videoId, visitorData)
+            val playerAvailable = !minted?.playerRequestPoToken.isNullOrBlank()
+            val streamingAvailable = !minted?.streamingDataPoToken.isNullOrBlank()
+            Log.i("ViMusicPlayback", "BOTGUARD stage=mint result=finished player=$playerAvailable streaming=$streamingAvailable")
+            minted?.let {
                 PoTokenResult(it.playerRequestPoToken, it.streamingDataPoToken, visitorData)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
             // InnerTubeX may try another client; no raw exception or response is logged.
-            Log.w("ViMusicPlayback", "BotGuard token generation failed; trying another client")
+            Log.w("ViMusicPlayback", "BOTGUARD stage=mint result=error")
             throw error
         }
     }

@@ -46,11 +46,11 @@ internal fun safeModernFailure(error: Exception): String {
 }
 
 /** Never include paths, query strings, headers or server messages in HTTP diagnostics. */
-internal fun safeHttpObservation(host: String, path: String, status: Int, keyHeader: Boolean, keyQuery: Boolean, clientId: String?, version: String?): String {
+internal fun safeHttpObservation(host: String, path: String, status: Int, keyHeader: Boolean, keyQuery: Boolean, clientId: String?, version: String?, visitorPresent: Boolean = false): String {
     val safeHost = host.takeIf { it in setOf("www.youtube.com", "music.youtube.com", "studio.youtube.com", "m.youtube.com", "youtubei.googleapis.com") } ?: "other"
     val route = if (path == "/youtubei/v1/player") "player" else "other"
     val safeStatus = status.takeIf { it in 100..599 } ?: 0
     val client = clientId?.takeIf { it.matches(Regex("[0-9]{1,4}")) } ?: "none"
     val clientVersion = version?.takeIf { it.length <= 40 && it.matches(Regex("[0-9]+(\\.[0-9]+){1,6}")) } ?: "none"
-    return "host=$safeHost route=$route http=$safeStatus client=$client version=$clientVersion keyHeader=$keyHeader keyQuery=$keyQuery"
+    return "host=$safeHost route=$route http=$safeStatus client=$client version=$clientVersion keyHeader=$keyHeader keyQuery=$keyQuery visitor=$visitorPresent"
 }

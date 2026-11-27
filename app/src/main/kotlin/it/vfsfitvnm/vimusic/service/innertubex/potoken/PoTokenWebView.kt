@@ -374,7 +374,12 @@ class PoTokenWebView private constructor(
                 .url(url)
             // .use{} so the response is closed on the non-200 path too (an unread body would
             // otherwise strand its connection).
-            val (httpCode, body) = withContext(Dispatchers.IO) {
+            val phase = when (url) {
+                "https://www.youtube.com/api/jnn/v1/Create" -> "create"
+                "https://www.youtube.com/api/jnn/v1/GenerateIT" -> "generate"
+                else -> "other"
+            }
+            val (httpCode, body) = try { withContext(Dispatchers.IO) {
                 httpClient.newCall(requestBuilder.build()).execute().use { response ->
                     val body = response.body
                     val text = if (response.code == 200 && body != null) {
@@ -384,7 +389,13 @@ class PoTokenWebView private constructor(
                     } else null
                     response.code to text
                 }
+            } } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.i("ViMusicPlayback", "BOTGUARD stage=$phase http=0")
+                throw error
             }
+            android.util.Log.i("ViMusicPlayback", "BOTGUARD stage=$phase http=${httpCode.takeIf { it in 100..599 } ?: 0}")
             // Treat an empty 200 body as a failure too: handleResponseBody would otherwise pass
             // "" to parseChallengeData/parseIntegrityTokenData and fail later with a murkier error.
             if (body.isNullOrEmpty()) {

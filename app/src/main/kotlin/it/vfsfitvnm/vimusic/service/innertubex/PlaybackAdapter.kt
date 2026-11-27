@@ -40,10 +40,10 @@ internal class PlaybackAdapter(client: HttpClient, tokenProvider: TokenProvider)
     suspend fun refreshAfterStreamRejection(): Boolean = cipher.refreshAfterStreamRejection()
 
     /** Network is used only when an explicit caller invokes this method. */
-    suspend fun resolve(videoId: String): StreamSnapshot {
+    suspend fun resolve(videoId: String, clientOverrideId: String? = null): StreamSnapshot {
         val stream = requireNotNull(extractor.extract(
             videoId = videoId,
-            hints = ContentHints(wantVideo = false).withStreamCapabilities(
+            hints = ContentHints(wantVideo = false, playbackClientOverrideId = clientOverrideId).withStreamCapabilities(
                 allowHls = false,
                 allowSabr = false,
                 // A range-chunking DataSource has not yet been implemented.
