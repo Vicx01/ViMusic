@@ -69,7 +69,7 @@ class LiveStrategyMatrixTest {
         // Independent anonymous attempts; forcing a profile has a one-player-request budget.
         val fixtures = listOf(
             "control" to "dQw4w9WgXcQ", "quickpicks" to "J7p4bzqLvCw",
-            "short" to "jNQXAC9IVRw", "long" to "aqz-KE-bpKQ",
+            "pop" to "9bZkp7q19f0", "classical-long" to "rOjHhS5MtvA",
         )
         val profiles = listOf("VISIONOS_0_1", "WEB_REMIX", "WEB_EMBEDDED_PLAYER")
         var usableRanges = 0
@@ -119,6 +119,59 @@ class LiveStrategyMatrixTest {
             try { adapter.close() } finally { try { source.close() } finally { client.close() } }
         }
         assertTrue("No public fixture returned an initial media range", usableRanges > 0)
+    }
+
+
+    /** Direct untokenized requests reveal status/reason categories; they are not extraction or playback. */
+    @Test(timeout = 300_000) fun playerResponseReasons() = runBlocking {
+        enabled()
+        val client = HttpClient(OkHttp) {
+            expectSuccess = false
+            install(ContentNegotiation) { json(json) }
+            install(HttpTimeout) { requestTimeoutMillis = 20_000; connectTimeoutMillis = 10_000; socketTimeoutMillis = 15_000 }
+        }
+        val tube = InnerTube(client)
+        try {
+            val visitor = try { tube.fetchFreshVisitorData() } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            val fixtures = listOf(
+                "control-r1" to "dQw4w9WgXcQ", "control-r2" to "dQw4w9WgXcQ", "control-r3" to "dQw4w9WgXcQ",
+                "quickpicks" to "J7p4bzqLvCw", "pop" to "9bZkp7q19f0", "classical-long" to "rOjHhS5MtvA",
+            )
+            val profiles = listOf("VISIONOS_0_1" to YouTubeClient.VISIONOS_0_1, "WEB_REMIX" to YouTubeClient.WEB_REMIX,
+                "WEB_EMBEDDED_PLAYER" to YouTubeClient.WEB_EMBEDDED_PLAYER)
+            for ((label, video) in fixtures) for ((profile, ytClient) in profiles) {
+                var http = 0
+                var status = "unknown"
+                var reason = "unknown"
+                try {
+                    val response = tube.player(ytClient, video, requestVisitorData = visitor)
+                    http = response.status.value
+                    val text = response.bodyAsText()
+                    if (text.length <= 1_000_000) {
+                        val playability = json.parseToJsonElement(text).jsonObject["playabilityStatus"]?.jsonObject
+                        val value = playability?.get("status")?.jsonPrimitive?.content
+                        if (value in setOf("OK", "ERROR", "LOGIN_REQUIRED", "UNPLAYABLE", "VIDEO_UNAVAILABLE", "LIVE_STREAM_OFFLINE", "AGE_CHECK_REQUIRED", "AGE_VERIFICATION_REQUIRED", "CONTENT_CHECK_REQUIRED")) status = value!!
+                        val rawReason = playability?.get("reason")?.jsonPrimitive?.content.orEmpty().lowercase()
+                        reason = when {
+                            rawReason.isBlank() -> "none"
+                            "bot" in rawReason -> "bot-check"
+                            "age" in rawReason -> "age-check"
+                            "country" in rawReason || "region" in rawReason -> "region"
+                            "sign in" in rawReason || "login" in rawReason -> "sign-in"
+                            "private" in rawReason -> "private"
+                            "unavailable" in rawReason || "not available" in rawReason || "removed" in rawReason -> "unavailable"
+                            else -> "other"
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    reason = "timeout"
+                } catch (failure: InnerTubeHttpException) { http = failure.status.value; reason = "http-error" }
+                catch (_: Exception) { reason = "network-or-decode-error" }
+                Log.i("ViMusicPlayback", "LIVE_DIRECT fixture=$label profile=$profile http=$http status=$status reason=$reason visitor=${!visitor.isNullOrBlank()} token=absent")
+            }
+        } finally { try { tube.close() } finally { client.close() } }
     }
 
     @Test(timeout = 120_000) fun realBotGuardAndPlayerAttachment() = runBlocking {

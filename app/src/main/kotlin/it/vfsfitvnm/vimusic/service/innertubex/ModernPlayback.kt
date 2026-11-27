@@ -5,6 +5,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.HttpResponseValidator
+import io.ktor.client.request.HttpSendPipeline
+import io.ktor.http.content.TextContent
+import io.ktor.http.encodedPath
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import android.util.Log
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
@@ -24,6 +29,23 @@ internal class ModernPlayback(context: Context) {
                     request.headers.contains("X-Goog-Visitor-Id"),
                 )
                 Log.i("ViMusicPlayback", "STREAM_HTTP $details")
+            }
+        }
+        install("SafePlayerRequestObservation") {
+            sendPipeline.intercept(HttpSendPipeline.Monitoring) {
+                if (context.url.encodedPath == "/youtubei/v1/player" &&
+                    context.url.host in setOf("music.youtube.com", "www.youtube.com", "youtubei.googleapis.com")) {
+                    val text = (subject as? TextContent)?.text
+                    val root = text?.takeIf { it.length <= 200_000 }?.let {
+                        runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull()
+                    }
+                    val tokenPresent = runCatching {
+                        !root?.get("serviceIntegrityDimensions")?.jsonObject?.get("poToken")?.jsonPrimitive?.content.isNullOrBlank()
+                    }.getOrDefault(false)
+                    val client = context.headers["X-YouTube-Client-Name"]?.takeIf { it.matches(Regex("[0-9]{1,4}")) } ?: "none"
+                    val inspected = root != null
+                    Log.i("ViMusicPlayback", "STREAM_REQUEST client=$client inspected=$inspected playerToken=$tokenPresent")
+                }
             }
         }
         install(ContentNegotiation) {
